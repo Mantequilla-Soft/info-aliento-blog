@@ -57,21 +57,26 @@ export const KeychainProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Load saved user data from localStorage if it exists
   // This is done on initial load and helps prevent unnecessary authentication
   useEffect(() => {
+    let mounted = true; // Add mounted flag to prevent memory leaks
+
     const savedUser = localStorage.getItem('hive_current_user');
     if (savedUser) {
       try {
         const userData = JSON.parse(savedUser);
         console.log('Found saved user data in localStorage:', userData.username);
-        setUser(userData);
-        setIsLoggedIn(true);
-        
+
+        if (mounted) {
+          setUser(userData);
+          setIsLoggedIn(true);
+        }
+
         // Silently refresh user data in the background without requiring re-authentication
         // This ensures we have the latest data without disrupting the user experience
         if (userData.username) {
           getUserData(userData.username)
             .then(freshUserData => {
               // Only update if component is still mounted and there are meaningful differences
-              if (freshUserData && JSON.stringify(userData) !== JSON.stringify(freshUserData)) {
+              if (mounted && freshUserData && JSON.stringify(userData) !== JSON.stringify(freshUserData)) {
                 console.log('Updating user data with fresh data from API');
                 setUser(freshUserData);
                 try {
@@ -82,7 +87,9 @@ export const KeychainProvider: React.FC<{ children: ReactNode }> = ({ children }
               }
             })
             .catch(error => {
-              console.error('Background refresh of user data failed:', error);
+              if (mounted) {
+                console.error('Background refresh of user data failed:', error);
+              }
               // Keep using cached data on error
             });
         }
@@ -91,6 +98,11 @@ export const KeychainProvider: React.FC<{ children: ReactNode }> = ({ children }
         localStorage.removeItem('hive_current_user');
       }
     }
+
+    // Cleanup function to prevent setState on unmounted component
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Check if Keychain is installed

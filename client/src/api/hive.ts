@@ -70,13 +70,15 @@ export const getHiveNodes = async (): Promise<HiveNode[]> => {
   }
 };
 
-// Conversion rate from VESTS to HIVE (HP)
-let vestToHpRatio: number | null = null;
+// Conversion rate from VESTS to HIVE (HP) with timestamp for cache invalidation
+let vestToHpRatioCache: { value: number; timestamp: number } | null = null;
+const VESTS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
 
 // Function to ensure we have the vests to hp ratio
 const ensureVestToHpRatio = async (): Promise<number> => {
-  if (vestToHpRatio !== null) {
-    return vestToHpRatio;
+  // Check if cache is still valid (within 5 minutes)
+  if (vestToHpRatioCache && Date.now() - vestToHpRatioCache.timestamp < VESTS_CACHE_DURATION) {
+    return vestToHpRatioCache.value;
   }
 
   try {
@@ -100,18 +102,25 @@ const ensureVestToHpRatio = async (): Promise<number> => {
     
     const data = await response.json();
     const props = data.result;
-    
+
     // Calculate the VESTS to HP ratio
     const totalHive = parseFloat(props.total_vesting_fund_hive.split(' ')[0]);
     const totalVests = parseFloat(props.total_vesting_shares.split(' ')[0]);
-    vestToHpRatio = totalHive / totalVests;
-    console.log('Updated VESTS to HP ratio:', vestToHpRatio);
-    
-    return vestToHpRatio;
+    const ratio = totalHive / totalVests;
+
+    // Update cache with timestamp
+    vestToHpRatioCache = {
+      value: ratio,
+      timestamp: Date.now()
+    };
+
+    console.log('Updated VESTS to HP ratio:', ratio);
+
+    return ratio;
   } catch (error) {
     console.error('Error getting VESTS to HP ratio:', error);
     // Use a reasonable fallback value based on typical ratio
-    return 0.5 / 1000000; // This is an approximation, use actual value when available
+    return 0.0005; // This is an approximation, use actual value when available
   }
 };
 
@@ -170,12 +179,19 @@ export const getNetworkStats = async (): Promise<NetworkStats> => {
     
     const data = await resultResponse.json();
     const props = data.result;
-    
+
     // Calculate the VESTS to HP ratio as per https://developers.hive.io/tutorials-recipes/vest-to-hive.html
     const totalHive = parseFloat(props.total_vesting_fund_hive.split(' ')[0]);
     const totalVests = parseFloat(props.total_vesting_shares.split(' ')[0]);
-    vestToHpRatio = totalHive / totalVests;
-    console.log('VESTS to HP ratio:', vestToHpRatio);
+    const ratio = totalHive / totalVests;
+
+    // Update cache with timestamp
+    vestToHpRatioCache = {
+      value: ratio,
+      timestamp: Date.now()
+    };
+
+    console.log('VESTS to HP ratio:', ratio);
     
     // Price feed request
     let priceResult;
@@ -374,6 +390,38 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
       // Try default node as a fallback if we're not already using it
       if (apiNode !== DEFAULT_API_NODE) {
         console.log('Using fallback node for witness list');
+
+        // Preserve pagination logic in fallback - calculate startFrom for the fallback node too
+        let fallbackStartFrom = "";
+        if (offset > 0) {
+          try {
+            // Fetch previous witnesses to get starting point for pagination
+            const prevResult = await fetch(DEFAULT_API_NODE, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                "jsonrpc": "2.0",
+                "method": "condenser_api.get_witnesses_by_vote",
+                "params": ["", offset],
+                "id": 1
+              })
+            });
+
+            if (prevResult.ok) {
+              const prevData = await prevResult.json();
+              const witnesses = prevData.result;
+              if (witnesses && witnesses.length > 0) {
+                fallbackStartFrom = witnesses[witnesses.length - 1].owner;
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching starting point for fallback pagination:', error);
+            // Continue with empty startFrom as fallback
+          }
+        }
+
         result = await fetch(DEFAULT_API_NODE, {
           method: 'POST',
           headers: {
@@ -382,7 +430,7 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
           body: JSON.stringify({
             "jsonrpc": "2.0",
             "method": "condenser_api.get_witnesses_by_vote",
-            "params": ["", limit], // Fallback to first batch
+            "params": [fallbackStartFrom, limit], // Use correct pagination offset
             "id": 1
           })
         });
@@ -435,7 +483,7 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
       // Convert VESTS to actual Hive Power using the conversion rate
       const vestAmount = parseFloat(witness.votes || '0');
       // Divide by 1,000,000 to account for the scale of VESTS in Hive blockchain
-      const hiveAmount = vestAmount * (vestToHpRatio || 0.0005) / 1000000;
+      const hiveAmount = vestAmount * (vestToHpRatioCache?.value || 0.0005) / 1000000;
       
       // Format Hive Power using our utility function
       const formattedHp = formatHivePower(hiveAmount);
@@ -565,9 +613,9 @@ export const calculateUserHivePower = async (username: string): Promise<string> 
     
     // Only use the account's own vesting shares, ignoring delegations in or out
     // as requested by the user
-    
+
     // Calculate Hive Power
-    const hivePower = vestingShares * (vestToHpRatio || 0.0005);
+    const hivePower = vestingShares * (vestToHpRatioCache?.value || 0.0005);
     
     // Format Hive Power
     return formatHivePower(hivePower);
@@ -596,9 +644,9 @@ export const calculateEffectiveHivePower = async (username: string): Promise<str
     
     // Total effective vesting shares = own + received - delegated
     const effectiveVests = vestingShares + receivedVestingShares - delegatedVestingShares;
-    
+
     // Calculate Hive Power
-    const hivePower = effectiveVests * (vestToHpRatio || 0.0005);
+    const hivePower = effectiveVests * (vestToHpRatioCache?.value || 0.0005);
     
     // Format Hive Power
     return formatHivePower(hivePower);
@@ -689,7 +737,7 @@ export const calculateProxiedHivePower = async (username: string): Promise<strin
     
     // Convert VSF votes to VESTS (divide by 1 million) then to HP
     const proxiedVestsInHiveUnits = totalProxiedVests / 1000000;
-    const proxiedHivePower = proxiedVestsInHiveUnits * (vestToHpRatio || 0.0005);
+    const proxiedHivePower = proxiedVestsInHiveUnits * (vestToHpRatioCache?.value || 0.0005);
     
     console.log(`${username} has ${formatHivePower(proxiedHivePower)} in proxied power from ${totalProxiedVests} VSF votes`);
     return formatHivePower(proxiedHivePower);
@@ -832,7 +880,7 @@ export const getWitnessByName = async (name: string): Promise<Witness | null> =>
     // Convert VESTS to actual Hive Power using the conversion rate
     const vestAmount = parseFloat(witness.votes);
     // Divide by 1,000,000 to account for the scale of VESTS in Hive blockchain
-    const hiveAmount = vestAmount * (vestToHpRatio || 0.0005) / 1000000;
+    const hiveAmount = vestAmount * (vestToHpRatioCache?.value || 0.0005) / 1000000;
     
     // Format Hive Power using our utility function
     const formattedHp = formatHivePower(hiveAmount);
@@ -995,7 +1043,7 @@ export const getProxyAccounts = async (username: string): Promise<ProxyAccount[]
               if (account.proxy === username) {
                 // Calculate Hive Power
                 const vestingShares = parseFloat(account.vesting_shares.split(' ')[0]);
-                const hivePower = vestingShares * (vestToHpRatio || 0.0005);
+                const hivePower = vestingShares * (vestToHpRatioCache?.value || 0.0005);
                 
                 proxyAccounts.push({
                   username: account.name,

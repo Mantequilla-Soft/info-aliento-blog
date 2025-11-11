@@ -58,8 +58,9 @@ export const useCurrentBlockProducer = () => {
     // Clean up on unmount
     return () => {
       mounted = false;
-      if (intervalId) {
+      if (intervalId !== null) {
         clearInterval(intervalId);
+        intervalId = null;
       }
     };
   }, []);
