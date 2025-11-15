@@ -24,9 +24,10 @@ export default function UserStats() {
     if (location === '/user-stats' && loggedInUser?.username) {
       return loggedInUser.username;
     }
-    // For URLs like /eddiespino, extract the username
-    const match = location.match(/^\/([^/]+)$/);
-    return match ? match[1] : null;
+    // For URLs like /@eddiespino or /eddiespino, extract the username
+    const match = location.match(/^\/(@)?([^/]+)$/);
+    // match[2] contains the username without the @ symbol
+    return match ? match[2] : null;
   };
 
   const username = getUsername();
@@ -145,8 +146,9 @@ export default function UserStats() {
         <Card>
           <CardHeader>
             <Tabs defaultValue="power">
-              <TabsList className="grid grid-cols-2">
+              <TabsList className="grid grid-cols-3">
                 <TabsTrigger value="power">Power Analysis</TabsTrigger>
+                <TabsTrigger value="earnings">Earnings</TabsTrigger>
                 <TabsTrigger value="votes">Witness Votes</TabsTrigger>
               </TabsList>
 
@@ -215,6 +217,119 @@ export default function UserStats() {
                 </div>
               </TabsContent>
 
+              <TabsContent value="earnings" className="mt-4">
+                <div className="space-y-4">
+                  <CardTitle className="text-xl">Lifetime Earnings</CardTitle>
+                  
+                  {user?.rewards ? (
+                    <>
+                      {/* Summary Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Author Rewards */}
+                        <Card className="border-l-4 border-l-green-500">
+                          <CardContent className="p-4">
+                            <div className="space-y-2">
+                              <div className="text-sm text-muted-foreground">Author Rewards</div>
+                              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                {user.rewards.authorRewards}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {user.rewards.authorPercentage.toFixed(1)}% of total earnings
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Curation Rewards */}
+                        <Card className="border-l-4 border-l-blue-500">
+                          <CardContent className="p-4">
+                            <div className="space-y-2">
+                              <div className="text-sm text-muted-foreground">Curation Rewards</div>
+                              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                {user.rewards.curationRewards}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {user.rewards.curationPercentage.toFixed(1)}% of total earnings
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Total Rewards */}
+                        <Card className="border-l-4 border-l-primary">
+                          <CardContent className="p-4">
+                            <div className="space-y-2">
+                              <div className="text-sm text-muted-foreground">Total Lifetime</div>
+                              <div className="text-2xl font-bold text-primary">
+                                {user.rewards.totalRewards}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Combined author + curation
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* Earning Strategy Indicator */}
+                      <Card>
+                        <CardContent className="p-6">
+                          <h4 className="font-semibold mb-3">Earning Strategy</h4>
+                          <div className="space-y-3">
+                            {/* Progress Bar */}
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-8 bg-muted rounded-full overflow-hidden flex">
+                                <div 
+                                  className="bg-green-500 flex items-center justify-center text-white text-xs font-medium"
+                                  style={{ width: `${user.rewards.authorPercentage}%` }}
+                                >
+                                  {user.rewards.authorPercentage > 10 && `${user.rewards.authorPercentage.toFixed(0)}%`}
+                                </div>
+                                <div 
+                                  className="bg-blue-500 flex items-center justify-center text-white text-xs font-medium"
+                                  style={{ width: `${user.rewards.curationPercentage}%` }}
+                                >
+                                  {user.rewards.curationPercentage > 10 && `${user.rewards.curationPercentage.toFixed(0)}%`}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Legend */}
+                            <div className="flex justify-between text-sm">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-green-500 rounded"></div>
+                                <span>Author ({user.rewards.authorRewards})</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                                <span>Curation ({user.rewards.curationRewards})</span>
+                              </div>
+                            </div>
+
+                            {/* Strategy Description */}
+                            <div className="mt-4 p-4 bg-muted/30 rounded-lg">
+                              <p className="text-sm text-muted-foreground">
+                                {user.rewards.authorPercentage > user.rewards.curationPercentage ? (
+                                  <><strong>Content Creator Focus:</strong> This account earns more from creating posts ({user.rewards.authorPercentage.toFixed(0)}%) than curating content ({user.rewards.curationPercentage.toFixed(0)}%).</>
+                                ) : user.rewards.curationPercentage > user.rewards.authorPercentage ? (
+                                  <><strong>Curator Focus:</strong> This account earns more from curating content ({user.rewards.curationPercentage.toFixed(0)}%) than creating posts ({user.rewards.authorPercentage.toFixed(0)}%).</>
+                                ) : (
+                                  <><strong>Balanced Approach:</strong> This account has a balanced earning strategy between content creation and curation.</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No earnings data available</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
               <TabsContent value="votes" className="mt-4">
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
@@ -247,7 +362,7 @@ export default function UserStats() {
                         </div>
                         <Button 
                           variant="outline" 
-                          onClick={() => setLocation(`/${user.proxy}`)}
+                          onClick={() => setLocation(`/@${user.proxy}`)}
                         >
                           View @{user.proxy}'s Profile
                         </Button>
@@ -268,7 +383,7 @@ export default function UserStats() {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => setLocation(`/witness/${witness}`)}
+                              onClick={() => setLocation(`/witness/@${witness}`)}
                             >
                               View Profile
                             </Button>

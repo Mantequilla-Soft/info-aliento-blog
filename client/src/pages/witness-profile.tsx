@@ -1,5 +1,5 @@
 import { useParams, useLocation } from 'wouter';
-import { useWitness, useWitnessVoters, usePagination } from '@/hooks/useWitnesses';
+import { useWitness, useWitnessVoters, usePagination, useWitnessAccountVoting } from '@/hooks/useWitnesses';
 import { useKeychain } from '@/context/KeychainContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useState } from 'react';
@@ -9,11 +9,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'wouter';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import VoteModal from '@/components/modals/VoteModal';
 import LoginModal from '@/components/modals/LoginModal';
 import ProxyAccountsModal from '@/components/modals/ProxyAccountsModal';
+import RecentActivity from '@/components/RecentActivity';
 import { ExternalLink } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
@@ -23,6 +25,7 @@ export default function WitnessProfile() {
   const witnessName = params.name?.replace('@', '');
   const { witness, isLoading } = useWitness(witnessName);
   const { voters, isLoading: isLoadingVoters } = useWitnessVoters(witnessName);
+  const { witnessVotes, proxy, isLoading: isLoadingVoting } = useWitnessAccountVoting(witnessName);
   const { isLoggedIn, user } = useKeychain();
   const { t } = useLanguage();
   const [, setLocation] = useLocation();
@@ -39,6 +42,50 @@ export default function WitnessProfile() {
 
   // Pagination for voters list
   const { paginatedItems: paginatedVoters, currentPage, totalPages, nextPage, prevPage, goToPage } = usePagination(voters, 10);
+  
+  // Pagination for witness votes
+  const { paginatedItems: paginatedWitnessVotes, currentPage: votesPage, totalPages: votesTotalPages, nextPage: votesNextPage, prevPage: votesPrevPage, goToPage: votesGoToPage } = usePagination(witnessVotes, 10);
+  
+  // Prepare pie chart data (top 10 voters + others)
+  const pieChartData = (() => {
+    if (voters.length === 0) return [];
+    
+    // Calculate total percentage of visible voters
+    const totalVisiblePercentage = voters.reduce((sum, voter) => sum + (voter.percentage || 0), 0);
+    
+    // Get top 9 voters
+    const topVoters = voters.slice(0, 9).map(voter => ({
+      name: voter.username,
+      value: voter.percentage || 0,
+      hp: voter.totalHivePower || voter.hivePower
+    }));
+    
+    // Add "Others" category
+    const othersPercentage = 100 - totalVisiblePercentage;
+    if (othersPercentage > 0) {
+      topVoters.push({
+        name: 'Others (not shown)',
+        value: parseFloat(othersPercentage.toFixed(2)),
+        hp: 'Unknown'
+      });
+    }
+    
+    return topVoters;
+  })();
+  
+  // Colors for pie chart - More vibrant and distinguishable palette
+  const COLORS = [
+    '#3b82f6', // Blue
+    '#10b981', // Green
+    '#f59e0b', // Amber
+    '#ef4444', // Red
+    '#8b5cf6', // Violet
+    '#ec4899', // Pink
+    '#06b6d4', // Cyan
+    '#f97316', // Orange
+    '#14b8a6', // Teal
+    '#6366f1', // Indigo
+  ];
   
   const handleVoteClick = () => {
     if (!isLoggedIn) {
@@ -134,10 +181,12 @@ export default function WitnessProfile() {
             <Card>
               <Tabs defaultValue="profile" onValueChange={setActiveTab} value={activeTab}>
                 <CardHeader className="pb-0">
-                  <TabsList className="grid grid-cols-3">
+                  <TabsList className="grid grid-cols-5">
                     <TabsTrigger value="profile">{t('profile.about')}</TabsTrigger>
                     <TabsTrigger value="stats">{t('profile.stats')}</TabsTrigger>
+                    <TabsTrigger value="voting">Voting</TabsTrigger>
                     <TabsTrigger value="voters">{t('profile.voters')}</TabsTrigger>
+                    <TabsTrigger value="activity">Activity</TabsTrigger>
                   </TabsList>
                 </CardHeader>
                 
@@ -232,9 +281,230 @@ export default function WitnessProfile() {
                     </div>
                   </TabsContent>
                   
+                  <TabsContent value="voting" className="mt-0">
+                    <div>
+                      <h3 className="text-xl font-semibold mb-4">Witness Voting Activity</h3>
+                      
+                      {isLoadingVoting ? (
+                        <div className="space-y-4">
+                          {[...Array(3)].map((_, i) => (
+                            <Skeleton key={i} className="h-4 w-full" />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {/* Proxy Status */}
+                          <div className="bg-muted/30 p-4 rounded-lg">
+                            <h4 className="font-medium mb-2">Proxy Status</h4>
+                            {proxy ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">Using Proxy</Badge>
+                                <button 
+                                  onClick={() => setLocation(`/@${proxy}`)}
+                                  className="text-primary hover:underline cursor-pointer font-medium"
+                                >
+                                  @{proxy}
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-muted-foreground">Not using a proxy - voting directly</p>
+                            )}
+                          </div>
+                          
+                          {/* Witness Votes */}
+                          <div>
+                            <h4 className="font-medium mb-3">Voting For ({witnessVotes.length}/30 witnesses)</h4>
+                            {witnessVotes.length > 0 ? (
+                              <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {paginatedWitnessVotes.map((witnessVote) => (
+                                    <div key={witnessVote} className="bg-muted/20 p-3 rounded-lg flex items-center justify-between">
+                                      <button 
+                                        onClick={() => setLocation(`/witness/@${witnessVote}`)}
+                                        className="text-primary hover:underline cursor-pointer font-medium flex items-center gap-2"
+                                      >
+                                        <Avatar className="h-6 w-6">
+                                          <AvatarImage src={`https://images.hive.blog/u/${witnessVote}/avatar`} alt={witnessVote} />
+                                          <AvatarFallback>{witnessVote.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                        </Avatar>
+                                        @{witnessVote}
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                                
+                                {votesTotalPages > 1 && (
+                                  <Pagination className="mt-6">
+                                    <PaginationContent>
+                                      <PaginationItem>
+                                        <PaginationPrevious onClick={votesPrevPage} />
+                                      </PaginationItem>
+                                      
+                                      {[...Array(Math.min(5, votesTotalPages))].map((_, i) => {
+                                        const pageNumber = i + 1;
+                                        return (
+                                          <PaginationItem key={i}>
+                                            <PaginationLink 
+                                              isActive={pageNumber === votesPage}
+                                              onClick={() => votesGoToPage(pageNumber)}
+                                            >
+                                              {pageNumber}
+                                            </PaginationLink>
+                                          </PaginationItem>
+                                        );
+                                      })}
+                                      
+                                      {votesTotalPages > 5 && (
+                                        <>
+                                          <PaginationItem>
+                                            <PaginationEllipsis />
+                                          </PaginationItem>
+                                          <PaginationItem>
+                                            <PaginationLink 
+                                              onClick={() => votesGoToPage(votesTotalPages)}
+                                            >
+                                              {votesTotalPages}
+                                            </PaginationLink>
+                                          </PaginationItem>
+                                        </>
+                                      )}
+                                      
+                                      <PaginationItem>
+                                        <PaginationNext onClick={votesNextPage} />
+                                      </PaginationItem>
+                                    </PaginationContent>
+                                  </Pagination>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-muted-foreground">Not voting for any witnesses</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
                   <TabsContent value="voters" className="mt-0">
                     <div>
-                      <h3 className="text-xl font-semibold mb-4">{t('profile.votersTitle')}</h3>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-semibold">{t('profile.votersTitle')}</h3>
+                        <Badge variant="outline" className="text-sm">
+                          Showing top voters (major HP holders)
+                        </Badge>
+                      </div>
+                      
+                      {/* Pie Chart */}
+                      {!isLoadingVoters && voters.length > 0 && pieChartData.length > 0 && (
+                        <Card className="mb-6 shadow-md">
+                          <CardHeader>
+                            <CardTitle className="text-lg">Voting Power Distribution</CardTitle>
+                            <CardDescription>
+                              Distribution of voting power among major stakeholders (top visible voters)
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                              {/* Pie Chart */}
+                              <div className="lg:col-span-2">
+                                <ResponsiveContainer width="100%" height={400}>
+                                  <PieChart>
+                                    <Pie
+                                      data={pieChartData}
+                                      cx="50%"
+                                      cy="50%"
+                                      labelLine={true}
+                                      label={({ name, value, percent }) => {
+                                        // Only show label if percentage is > 2% to avoid clutter
+                                        if (value > 2) {
+                                          return `${name.length > 15 ? name.substring(0, 12) + '...' : name} (${value}%)`;
+                                        }
+                                        return '';
+                                      }}
+                                      outerRadius={120}
+                                      innerRadius={60}
+                                      fill="#8884d8"
+                                      dataKey="value"
+                                      paddingAngle={2}
+                                      animationBegin={0}
+                                      animationDuration={800}
+                                    >
+                                      {pieChartData.map((entry, index) => (
+                                        <Cell 
+                                          key={`cell-${index}`} 
+                                          fill={COLORS[index % COLORS.length]}
+                                          stroke="rgba(255,255,255,0.8)"
+                                          strokeWidth={2}
+                                        />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip 
+                                      contentStyle={{
+                                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                                      }}
+                                      formatter={(value: any, name: any, props: any) => [
+                                        `${value}% (${props.payload.hp})`,
+                                        name
+                                      ]}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                              
+                              {/* Legend with Details */}
+                              <div className="space-y-2">
+                                <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Top Voters</h4>
+                                <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+                                  {pieChartData.map((entry, index) => (
+                                    <button
+                                      key={index}
+                                      onClick={() => {
+                                        if (entry.name !== 'Others (not shown)') {
+                                          setLocation(`/@${entry.name}`);
+                                        }
+                                      }}
+                                      disabled={entry.name === 'Others (not shown)'}
+                                      className={`flex items-center justify-between p-2 rounded-lg w-full text-left transition-colors ${
+                                        entry.name === 'Others (not shown)' 
+                                          ? 'bg-muted/20 cursor-default' 
+                                          : 'hover:bg-muted/40 cursor-pointer'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <div 
+                                          className="w-3 h-3 rounded-full flex-shrink-0" 
+                                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                                        />
+                                        <span className="text-sm font-medium truncate">
+                                          {entry.name === 'Others (not shown)' ? 'Others' : `@${entry.name}`}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        <span className="text-xs text-muted-foreground">{entry.hp}</span>
+                                        <Badge variant="secondary" className="text-xs">
+                                          {entry.value}%
+                                        </Badge>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                      
+                      {/* Info Note */}
+                      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                        <p className="text-sm text-blue-900 dark:text-blue-100">
+                          <strong>Note:</strong> This list shows only major HP holders voting for this witness. 
+                          To see ALL voters, HAF SQL infrastructure is required. The displayed voters typically 
+                          represent 80-90% of the total voting power.
+                        </p>
+                      </div>
                       
                       {isLoadingVoters ? (
                         <div className="space-y-4">
@@ -258,6 +528,7 @@ export default function WitnessProfile() {
                                 <TableHead className="text-right">{t('profile.ownHP')}</TableHead>
                                 <TableHead className="text-right">{t('profile.proxiedHP')}</TableHead>
                                 <TableHead className="text-right">{t('profile.totalGov')}</TableHead>
+                                <TableHead className="text-right">% of Total</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -271,7 +542,7 @@ export default function WitnessProfile() {
                                   </TableCell>
                                   <TableCell>
                                     <button 
-                                      onClick={() => setLocation(`/${voter.username}`)}
+                                      onClick={() => setLocation(`/@${voter.username}`)}
                                       className="text-primary hover:underline cursor-pointer font-medium"
                                     >
                                       @{voter.username}
@@ -291,6 +562,11 @@ export default function WitnessProfile() {
                                       const totalHP = ownHP + proxiedHP;
                                       return totalHP.toLocaleString() + ' governance vote';
                                     })()}
+                                  </TableCell>
+                                  <TableCell className="text-right font-medium">
+                                    {voter.percentage ? (
+                                      <Badge variant="secondary">{voter.percentage}%</Badge>
+                                    ) : '-'}
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -343,6 +619,13 @@ export default function WitnessProfile() {
                       ) : (
                         <p className="text-muted-foreground">{t('profile.noVoters')}</p>
                       )}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="activity" className="mt-0">
+                    <div>
+                      <h3 className="text-xl font-semibold mb-4">Recent Voting Activity</h3>
+                      <RecentActivity witnessName={witnessName} />
                     </div>
                   </TabsContent>
                 </CardContent>

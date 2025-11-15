@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getWitnesses, getWitnessByName, getWitnessVoters, getProxyAccounts, getBestHiveNode } from '@/api/hive';
+import { getWitnesses, getWitnessByName, getWitnessVoters, getProxyAccounts, getBestHiveNode, getWitnessAccountVoting } from '@/api/hive';
 import { Witness, WitnessVoter, ProxyAccount } from '@/types/hive';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 
@@ -52,8 +52,8 @@ export const useCurrentBlockProducer = () => {
     // Initial fetch
     fetchCurrentBlockProducer();
     
-    // Set up polling interval (every 30 seconds to reduce API load)
-    intervalId = setInterval(fetchCurrentBlockProducer, 30000);
+    // Set up polling interval (every 3 seconds to match block time)
+    intervalId = setInterval(fetchCurrentBlockProducer, 3000);
     
     // Clean up on unmount
     return () => {
@@ -120,7 +120,7 @@ export function useWitnesses(
   } = useQuery({
     queryKey: ['witnesses', currentPage],
     queryFn: fetchWitnesses,
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: 1000 * 3, // 3 seconds - matches Hive block time
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData, // TanStack Query v5 way to keep previous data while loading
   });
@@ -128,14 +128,14 @@ export function useWitnesses(
   // Track current block producer
   const currentBlockProducer = useCurrentBlockProducer();
   
-  // Set up automatic refreshing of witness data every 30 seconds - only for the first page
+  // Set up automatic refreshing of witness data every 3 seconds - only for the first page
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     
     if (currentPage === 0) {
       intervalId = setInterval(() => {
         refetch();
-      }, 30000); // 30 second refresh for last block numbers
+      }, 3000); // 3 second refresh - matches Hive block time for real-time updates
     }
       
     return () => {
@@ -260,6 +260,23 @@ export function useProxyAccounts(username: string) {
 
   return {
     proxyAccounts,
+    isLoading,
+    isError,
+    error
+  };
+}
+
+export function useWitnessAccountVoting(witnessName: string) {
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['witness-account-voting', witnessName],
+    queryFn: () => getWitnessAccountVoting(witnessName),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: !!witnessName,
+  });
+
+  return {
+    witnessVotes: data?.witnessVotes || [],
+    proxy: data?.proxy || null,
     isLoading,
     isError,
     error
