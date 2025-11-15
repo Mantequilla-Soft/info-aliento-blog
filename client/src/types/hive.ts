@@ -40,6 +40,17 @@ export interface UserData {
   freeWitnessVotes?: number;
   witnessVotes?: string[];
   proxy?: string; // The account this user is proxying their votes to
+  rewards?: AccountRewards; // Lifetime rewards data
+}
+
+export interface AccountRewards {
+  authorRewards: string; // Lifetime author rewards in HP
+  curationRewards: string; // Lifetime curation rewards in HP
+  totalRewards: string; // Combined total
+  authorPercentage: number; // % from authoring
+  curationPercentage: number; // % from curation
+  authorRewardsRaw: number; // Raw HP value for calculations
+  curationRewardsRaw: number; // Raw HP value for calculations
 }
 
 export interface ProxyAccount {
@@ -55,6 +66,7 @@ export interface WitnessVoter {
   hivePower: string;
   proxiedHivePower?: string;
   totalHivePower?: string;
+  percentage?: number; // Percentage of witness's total voting power
   proxyAccounts?: ProxyAccount[];
 }
 

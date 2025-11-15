@@ -1,4 +1,4 @@
-import { HiveNode, NetworkStats, Witness, UserData, WitnessVoter, ProxyAccount } from '@/types/hive';
+import { HiveNode, NetworkStats, Witness, UserData, WitnessVoter, ProxyAccount, AccountRewards } from '@/types/hive';
 import { formatNumberWithCommas, formatHivePower, formatLargeNumber } from '@/lib/utils';
 
 // Default API node to use if we can't fetch the best nodes
@@ -547,6 +547,28 @@ export const getUserWitnessVotes = async (username: string): Promise<string[]> =
   }
 };
 
+// Get witness account voting information (votes + proxy)
+export const getWitnessAccountVoting = async (username: string): Promise<{ witnessVotes: string[], proxy: string | null }> => {
+  try {
+    const account = await getUserAccount(username);
+    
+    if (!account) {
+      return { witnessVotes: [], proxy: null };
+    }
+    
+    // Witness votes are stored in the account's 'witness_votes' array
+    const witnessVotes = account.witness_votes || [];
+    
+    // Proxy is a string field (empty if not proxying)
+    const proxy = account.proxy && account.proxy.trim() !== '' ? account.proxy : null;
+    
+    return { witnessVotes, proxy };
+  } catch (error) {
+    console.error(`Error fetching witness account voting for ${username}:`, error);
+    return { witnessVotes: [], proxy: null };
+  }
+};
+
 // Calculate user's Hive Power
 export const calculateUserHivePower = async (username: string): Promise<string> => {
   try {
@@ -700,6 +722,58 @@ export const calculateProxiedHivePower = async (username: string): Promise<strin
   }
 };
 
+// Get account rewards (author and curation)
+export const getAccountRewards = async (username: string): Promise<AccountRewards> => {
+  try {
+    const account = await getUserAccount(username);
+    
+    if (!account) {
+      return {
+        authorRewards: '0 HP',
+        curationRewards: '0 HP',
+        totalRewards: '0 HP',
+        authorPercentage: 0,
+        curationPercentage: 0,
+        authorRewardsRaw: 0,
+        curationRewardsRaw: 0
+      };
+    }
+    
+    // Get rewards from account (these are integers representing HP * 1000)
+    // The API returns rewards as integers without decimals, scaled by 1000
+    const authorHPScaled = parseFloat(account.posting_rewards || '0');
+    const curationHPScaled = parseFloat(account.curation_rewards || '0');
+    
+    // Divide by 1000 to get actual HP values
+    const authorHP = authorHPScaled / 1000;
+    const curationHP = curationHPScaled / 1000;
+    const totalHP = authorHP + curationHP;
+    
+    console.log(`${username} rewards - Author: ${authorHP.toFixed(0)} HP, Curation: ${curationHP.toFixed(0)} HP`);
+    
+    return {
+      authorRewards: formatHivePower(authorHP),
+      curationRewards: formatHivePower(curationHP),
+      totalRewards: formatHivePower(totalHP),
+      authorPercentage: totalHP > 0 ? (authorHP / totalHP) * 100 : 0,
+      curationPercentage: totalHP > 0 ? (curationHP / totalHP) * 100 : 0,
+      authorRewardsRaw: authorHP,
+      curationRewardsRaw: curationHP
+    };
+  } catch (error) {
+    console.error(`Error getting account rewards for ${username}:`, error);
+    return {
+      authorRewards: '0 HP',
+      curationRewards: '0 HP',
+      totalRewards: '0 HP',
+      authorPercentage: 0,
+      curationPercentage: 0,
+      authorRewardsRaw: 0,
+      curationRewardsRaw: 0
+    };
+  }
+};
+
 // Get complete user data including profile, Hive Power and witness votes
 export const getUserData = async (username: string): Promise<UserData> => {
   try {
@@ -726,6 +800,9 @@ export const getUserData = async (username: string): Promise<UserData> => {
     // Calculate free witness votes
     const freeWitnessVotes = await getFreeWitnessVotes(username);
     
+    // Get lifetime rewards
+    const rewards = await getAccountRewards(username);
+    
     // Return complete user data
     return {
       username,
@@ -735,7 +812,8 @@ export const getUserData = async (username: string): Promise<UserData> => {
       proxiedHivePower,
       freeWitnessVotes,
       witnessVotes,
-      proxy
+      proxy,
+      rewards
     };
   } catch (error) {
     console.error(`Error getting complete user data for ${username}:`, error);
@@ -1425,6 +1503,39 @@ export const getWitnessVoters = async (witnessName: string): Promise<WitnessVote
     
     console.log(`Found ${voters.length} voters for witness ${witnessName}`);
     
+    // Get the witness data to find total votes
+    let witnessData = null;
+    try {
+      const witnessResponse = await fetch(apiNode, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          "jsonrpc": "2.0",
+          "method": "condenser_api.get_witness_by_account",
+          "params": [witnessName],
+          "id": 8
+        })
+      });
+      
+      if (witnessResponse.ok) {
+        const witnessDataResponse = await witnessResponse.json();
+        witnessData = witnessDataResponse.result;
+      }
+    } catch (error) {
+      console.error(`Error fetching witness data for percentage calculation:`, error);
+    }
+    
+    // Calculate total votes in VESTS and convert to HP
+    let totalWitnessVotesHP = 0;
+    if (witnessData && witnessData.votes) {
+      // votes field is in VESTS (but stored as a large integer)
+      const votesInVests = parseFloat(witnessData.votes) / 1000000; // Convert from micro-vests
+      totalWitnessVotesHP = votesInVests * vestToHpRatio;
+      console.log(`Witness ${witnessName} total votes: ${totalWitnessVotesHP.toLocaleString()} HP`);
+    }
+    
     // Sort by Total Hive Power (own + proxied) in descending order
     voters = voters.sort((a: WitnessVoter, b: WitnessVoter) => {
       const aOwnHP = parseFloat(a.hivePower.replace(/[^0-9.]/g, ''));
@@ -1437,6 +1548,21 @@ export const getWitnessVoters = async (witnessName: string): Promise<WitnessVote
       
       return bTotalHP - aTotalHP;
     });
+    
+    // Calculate percentage for each voter
+    if (totalWitnessVotesHP > 0) {
+      voters = voters.map(voter => {
+        const ownHP = parseFloat(voter.hivePower.replace(/[^0-9.]/g, ''));
+        const proxiedHP = voter.proxiedHivePower ? parseFloat(voter.proxiedHivePower.replace(/[^0-9.]/g, '')) : 0;
+        const totalVoterHP = ownHP + proxiedHP;
+        const percentage = (totalVoterHP / totalWitnessVotesHP) * 100;
+        
+        return {
+          ...voter,
+          percentage: parseFloat(percentage.toFixed(2))
+        };
+      });
+    }
     
     return voters;
     
