@@ -5,7 +5,7 @@ type Language = 'en' | 'es';
 interface LanguageContextType {
   language: Language;
   setLanguage: (language: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 // Get browser language or default to English
@@ -46,7 +46,7 @@ const getInitialLanguage = (): Language => {
 const LanguageContext = createContext<LanguageContextType>({
   language: 'en',
   setLanguage: () => {},
-  t: (key: string) => key,
+  t: (key: string, params?: Record<string, string | number>) => key,
 });
 
 export function useLanguage() {
@@ -102,8 +102,20 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
       'network.hivePrice': 'HIVE Price',
       'network.apiNodes': 'API Nodes Status',
       'network.nodeUrl': 'Node URL',
+      'network.nodeName': 'Node Name',
       'network.version': 'Version',
       'network.score': 'Score',
+      'network.tests': 'Tests Passed',
+      'network.viewAll': 'View All',
+      'network.viewAllNodes': 'View All {{count}} Nodes',
+      'network.apiNodesTitle': 'Hive API Nodes',
+      'network.apiNodesSubtitle': 'Real-time status and performance metrics of Hive blockchain API nodes',
+      'network.totalNodes': 'Total Nodes',
+      'network.perfectScore': 'Perfect Score (100%)',
+      'network.latestVersion': 'Latest Version',
+      'network.tableInfo': 'Click column headers to sort',
+      'network.tableInfoDetail': 'These nodes are monitored in real-time. Score represents the percentage of successful API calls. Click any node name to visit their endpoint.',
+      'common.back': 'Back',
       
       // Witnesses page
       'witnesses.title': 'Hive Witnesses',
@@ -293,8 +305,20 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
       'network.hivePrice': 'Precio de HIVE',
       'network.apiNodes': 'Estado de Nodos API',
       'network.nodeUrl': 'URL del Nodo',
+      'network.nodeName': 'Nombre del Nodo',
       'network.version': 'Versión',
       'network.score': 'Puntuación',
+      'network.tests': 'Pruebas Pasadas',
+      'network.viewAll': 'Ver Todos',
+      'network.viewAllNodes': 'Ver Todos los {{count}} Nodos',
+      'network.apiNodesTitle': 'Nodos API de Hive',
+      'network.apiNodesSubtitle': 'Estado en tiempo real y métricas de rendimiento de los nodos API de la blockchain Hive',
+      'network.totalNodes': 'Total de Nodos',
+      'network.perfectScore': 'Puntuación Perfecta (100%)',
+      'network.latestVersion': 'Última Versión',
+      'network.tableInfo': 'Haz clic en los encabezados de columna para ordenar',
+      'network.tableInfoDetail': 'Estos nodos son monitoreados en tiempo real. La puntuación representa el porcentaje de llamadas API exitosas. Haz clic en cualquier nombre de nodo para visitar su endpoint.',
+      'common.back': 'Volver',
       
       // Witnesses page
       'witnesses.title': 'Testigos de Hive',
@@ -458,24 +482,29 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
     }
   };
 
-  const translate = (key: string): string => {
+  const translate = (key: string, params?: Record<string, string | number>): string => {
     // Get translation or fallback to English or the key itself
-    const translation = translations[language][key as keyof typeof translations[typeof language]];
+    let translation = translations[language][key as keyof typeof translations[typeof language]];
     
-    if (translation) {
-      return translation;
+    if (!translation && language !== 'en') {
+      // If missing in current language, try English as fallback
+      translation = translations['en'][key as keyof typeof translations['en']];
     }
     
-    // If missing in current language, try English as fallback
-    if (language !== 'en') {
-      const englishTranslation = translations['en'][key as keyof typeof translations['en']];
-      if (englishTranslation) {
-        return englishTranslation;
-      }
+    if (!translation) {
+      // If all fails, return the key itself
+      return key;
     }
     
-    // If all fails, return the key itself
-    return key;
+    // If params provided, replace {{param}} placeholders
+    if (params) {
+      return Object.entries(params).reduce(
+        (text, [param, value]) => text.replace(new RegExp(`{{${param}}}`, 'g'), String(value)),
+        translation
+      );
+    }
+    
+    return translation;
   };
 
   // Update html lang attribute when language changes

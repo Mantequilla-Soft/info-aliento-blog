@@ -20,7 +20,7 @@ export function useHiveNodes() {
   const { data: nodes = [], isLoading, isError, error } = useQuery({
     queryKey: ['hiveNodes'],
     queryFn: getHiveNodes,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 30, // 30 seconds - refresh more frequently to show latest data
   });
 
   return {

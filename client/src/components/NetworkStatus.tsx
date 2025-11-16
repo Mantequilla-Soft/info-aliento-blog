@@ -1,9 +1,10 @@
 import { useNetworkStats, useHiveNodes } from '@/hooks/useNetworkStats';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/context/LanguageContext';
+import { Link } from 'wouter';
+import ApiNodesTable from './ApiNodesTable';
 
 export default function NetworkStatus() {
   const { stats, isLoading: statsLoading } = useNetworkStats();
@@ -84,101 +85,31 @@ export default function NetworkStatus() {
         </Card>
       </div>
       
-      {/* API Nodes Status */}
+      {/* API Nodes Status - Preview */}
       <div className="mt-12">
-        <h3 className="text-lg font-medium text-foreground mb-4">{t('network.apiNodes')}</h3>
-        
-        {/* Desktop View - Table */}
-        <div className="hidden md:block">
-          <Card className="overflow-hidden border-border">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="font-medium">{t('network.nodeUrl')}</TableHead>
-                    <TableHead className="font-medium">{t('network.version')}</TableHead>
-                    <TableHead className="font-medium text-right">{t('network.score')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {nodesLoading ? (
-                    Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                        <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                        <TableCell className="text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    nodes.slice(0, 10).map((node, index) => (
-                      <TableRow key={index} className={index % 2 === 0 ? 'bg-muted/20' : ''}>
-                        <TableCell className="text-sm font-medium text-primary hover:text-primary/80">
-                          <a href={node.url.startsWith('http') ? node.url : `https://${node.url}`} target="_blank" rel="noopener noreferrer">
-                            {node.url}
-                          </a>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {node.version}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge 
-                            variant={node.score === '100%' ? 'default' : 'outline'}
-                            className={`${node.score === '100%' ? 'bg-primary/20 text-primary' : 'text-muted-foreground'} min-w-[60px] text-center`}
-                          >
-                            {node.score}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-foreground">{t('network.apiNodes')}</h3>
+          <Link href="/api-nodes">
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              {t('network.viewAll')}
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </Button>
+          </Link>
         </div>
         
-        {/* Mobile View - Cards */}
-        <div className="md:hidden space-y-4">
-          {nodesLoading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Card key={i} className="p-4">
-                  <Skeleton className="h-5 w-2/3 mb-3" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-full" />
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {nodes.slice(0, 10).map((node, index) => (
-                <Card key={index} className="overflow-hidden border-border">
-                  <div className="p-4 bg-muted/30 border-b border-border flex justify-between items-center">
-                    <div className="font-medium text-primary truncate mr-2">
-                      <a href={node.url.startsWith('http') ? node.url : `https://${node.url}`} target="_blank" rel="noopener noreferrer">
-                        {node.url}
-                      </a>
-                    </div>
-                    <Badge 
-                      variant={node.score === '100%' ? 'default' : 'outline'}
-                      className={`${node.score === '100%' ? 'bg-primary/20 text-primary' : 'text-muted-foreground'} min-w-[60px] text-center`}
-                    >
-                      {node.score}
-                    </Badge>
-                  </div>
-                  <div className="p-4 text-sm">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      <div className="text-muted-foreground">{t('network.version')}:</div>
-                      <div>{node.version}</div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Preview Table - Top 5 nodes */}
+        <ApiNodesTable nodes={nodes} isLoading={nodesLoading} limit={5} />
+        
+        {/* View All Link for Mobile */}
+        {!nodesLoading && nodes.length > 5 && (
+          <div className="mt-4 text-center">
+            <Link href="/api-nodes">
+              <Button variant="link" className="text-primary">
+                {t('network.viewAllNodes', { count: nodes.length })}
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
