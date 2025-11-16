@@ -9,6 +9,7 @@ import Witnesses from "@/pages/witnesses";
 import About from "@/pages/about";
 import WitnessProfile from "@/pages/witness-profile";
 import UserStats from "@/pages/user-stats";
+import ApiNodes from "@/pages/ApiNodes";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import { ThemeProvider } from "./components/ThemeProvider";
@@ -21,6 +22,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/witnesses" component={Witnesses} />
+      <Route path="/api-nodes" component={ApiNodes} />
       <Route path="/about" component={About} />
       <Route path="/witness/@:name" component={WitnessProfile} />
       <Route path="/witness/:name" component={WitnessProfile} />

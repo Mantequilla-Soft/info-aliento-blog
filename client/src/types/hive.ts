@@ -1,8 +1,10 @@
 export interface HiveNode {
   url: string;
+  name?: string;
   version: string;
   lastUpdate: string;
   score: string;
+  scoreValue?: number;
   tests: string;
 }
 
