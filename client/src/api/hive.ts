@@ -42,6 +42,12 @@ export const getBestHiveNode = async (): Promise<string> => {
   }
 };
 
+// Function to clear the nodes cache (useful for testing)
+export const clearNodesCache = () => {
+  cachedNodeList = [];
+  cachedBestNode = null;
+};
+
 // Function to get available Hive API nodes
 export const getHiveNodes = async (): Promise<HiveNode[]> => {
   if (cachedNodeList.length > 0) {
@@ -56,14 +62,32 @@ export const getHiveNodes = async (): Promise<HiveNode[]> => {
     // Format node data
     const nodes = data.map((node: any) => ({
       url: node.endpoint || node.url, // Use endpoint property if available (contains full URL)
+      name: node.name || node.endpoint || node.url,
       version: node.version || '-',
-      lastUpdate: node.lastUpdate || 'unknown',
+      lastUpdate: node.updated_at || 'unknown',
       score: `${node.score}%`,
-      tests: `${node.passedTests} / ${node.totalTests}`
+      scoreValue: node.score, // Keep numeric value for sorting
+      tests: node.success && node.fail !== undefined ? `${node.success} / ${node.success + node.fail}` : '-'
     }));
     
-    cachedNodeList = nodes;
-    return nodes;
+    // Sort by score (desc), then version (desc), then name (asc)
+    const sortedNodes = nodes.sort((a: any, b: any) => {
+      // First sort by score (higher is better)
+      if (b.scoreValue !== a.scoreValue) {
+        return b.scoreValue - a.scoreValue;
+      }
+      
+      // Then by version (newer is better)
+      if (a.version !== b.version && a.version !== '-' && b.version !== '-') {
+        return b.version.localeCompare(a.version, undefined, { numeric: true });
+      }
+      
+      // Finally by name (alphabetical)
+      return a.name.localeCompare(b.name);
+    });
+    
+    cachedNodeList = sortedNodes;
+    return sortedNodes;
   } catch (error) {
     console.error('Error fetching Hive nodes:', error);
     return [];
