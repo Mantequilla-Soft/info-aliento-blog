@@ -1138,10 +1138,10 @@ export const getProxyAccounts = async (username: string): Promise<ProxyAccount[]
 
 export const getWitnessVoters = async (witnessName: string): Promise<WitnessVoter[]> => {
   try {
-    const apiNode = await getBestHiveNode();
-    console.log(`Fetching voters for witness ${witnessName} from:`, apiNode);
+    console.log(`Fetching voters for witness ${witnessName} from HAF-BE API`);
     
-    // Get the VESTS to HP ratio
+    // Get the VESTS to HP ratio for conversion
+    const apiNode = await getBestHiveNode();
     const dynamicProps = await fetch(apiNode, {
       method: 'POST',
       headers: {
@@ -1160,375 +1160,78 @@ export const getWitnessVoters = async (witnessName: string): Promise<WitnessVote
     
     console.log("VESTS to HP ratio:", vestToHpRatio);
     
-    // Map to store unique voters (keyed by username)
-    const votersMap = new Map<string, WitnessVoter>();
+    // Fetch all voters from HAF-BE API (paginated)
+    const voters: WitnessVoter[] = [];
+    let page = 1;
+    const pageSize = 100;
+    let hasMorePages = true;
+    let totalVotes = 0;
     
-    // APPROACH 1: Get the top 200 accounts by vesting (highest HP)
-    // This approach targets the accounts with the most governance power
-    try {
-      const response = await fetch(apiNode, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          "jsonrpc": "2.0",
-          "method": "database_api.list_vesting_delegations",
-          "params": {"start": null, "limit": 200, "order": "by_delegation_vests_desc"},
-          "id": 1
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.result && data.result.delegations) {
-          // Get usernames of top stakeholders
-          const topUsernames = data.result.delegations.map((d: any) => d.delegator);
-          
-          // Fetch these accounts to check for witness votes
-          if (topUsernames.length > 0) {
-            // Process in batches of 50
-            const batchSize = 50;
-            for (let i = 0; i < topUsernames.length; i += batchSize) {
-              const batch = topUsernames.slice(i, i + batchSize);
-              
-              const accountsResponse = await fetch(apiNode, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  "jsonrpc": "2.0",
-                  "method": "condenser_api.get_accounts",
-                  "params": [batch],
-                  "id": 2
-                })
-              });
-              
-              if (accountsResponse.ok) {
-                const accountsData = await accountsResponse.json();
-                const accounts = accountsData.result || [];
-                
-                // Process voters
-                for (const account of accounts) {
-                  if (account.witness_votes && account.witness_votes.includes(witnessName)) {
-                    // Process account information
-                    const vestingShares = parseFloat(account.vesting_shares.split(' ')[0]);
-                    const hivePower = vestingShares * vestToHpRatio;
-                    
-                    // Calculate proxied HP
-                    let proxiedHp = 0;
-                    let proxiedHivePower = undefined;
-                    
-                    if (account.proxied_vsf_votes && Array.isArray(account.proxied_vsf_votes)) {
-                      let totalProxiedVests = 0;
-                      for (const vests of account.proxied_vsf_votes) {
-                        totalProxiedVests += parseFloat(vests) / 1000000;
-                      }
-                      proxiedHp = totalProxiedVests * vestToHpRatio;
-                      
-                      if (proxiedHp > 0) {
-                        proxiedHivePower = formatHivePower(proxiedHp);
-                      }
-                    }
-                    
-                    // Calculate total HP (own + proxied)
-                    const totalHp = hivePower + proxiedHp;
-                    
-                    votersMap.set(account.name, {
-                      username: account.name,
-                      profileImage: `https://images.hive.blog/u/${account.name}/avatar`,
-                      hivePower: formatHivePower(hivePower),
-                      proxiedHivePower,
-                      totalHivePower: formatHivePower(totalHp)
-                    });
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching top vesting accounts:", error);
-    }
-    
-    // APPROACH 2: Query accounts that are known to be major stakeholders
-    // This list matches the accounts seen in your example screenshot
-    const knownMajorStakeholders = [
-      'blocktrades', 'smooth', 'darthknight', 'theycallmedan', 'gtg', 
-      'oflyhigh', 'elmerlin', 'yabapmatt', 'balte', 'neoxian', 'lazy-panda',
-      'newhope', 'tarazkp', 'yeoguido.park', 'stoodkev', 'vcelier', 'peakd',
-      'engrave', 'arcange', 'quochuy', 'spectrumecons', 'hiro-hive', 'anyx',
-      'broncnutz', 'zuerich', 'slobberchops', 'edicted', 'brianoflondon', 
-      'hivefuture', 'steempress', 'justinw', 'teamaustralia', 'patrickulrich',
-      'roelandp', 'holger80', 'jackmiller', 'steemitblog', 'liondani', 'curie'
-    ];
-    
-    try {
-      // Fetch accounts in batches of 50
-      const batchSize = 50;
-      for (let i = 0; i < knownMajorStakeholders.length; i += batchSize) {
-        const batch = knownMajorStakeholders.slice(i, i + batchSize);
-        
-        const response = await fetch(apiNode, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            "jsonrpc": "2.0",
-            "method": "condenser_api.get_accounts",
-            "params": [batch],
-            "id": 3
-          })
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const accounts = data.result || [];
-          
-          // Process voters
-          for (const account of accounts) {
-            if (account.witness_votes && account.witness_votes.includes(witnessName)) {
-              // Skip if already in the map
-              if (votersMap.has(account.name)) continue;
-              
-              // Calculate Hive Power
-              const vestingShares = parseFloat(account.vesting_shares.split(' ')[0]);
-              const hivePower = vestingShares * vestToHpRatio;
-              
-              // Calculate proxied HP
-              let proxiedHp = 0;
-              let proxiedHivePower = undefined;
-              
-              if (account.proxied_vsf_votes && Array.isArray(account.proxied_vsf_votes)) {
-                let totalProxiedVests = 0;
-                for (const vests of account.proxied_vsf_votes) {
-                  totalProxiedVests += parseFloat(vests) / 1000000;
-                }
-                proxiedHp = totalProxiedVests * vestToHpRatio;
-                
-                if (proxiedHp > 0) {
-                  proxiedHivePower = formatHivePower(proxiedHp);
-                }
-              }
-              
-              // Calculate total HP
-              const totalHp = hivePower + proxiedHp;
-              
-              votersMap.set(account.name, {
-                username: account.name,
-                profileImage: `https://images.hive.blog/u/${account.name}/avatar`,
-                hivePower: formatHivePower(hivePower),
-                proxiedHivePower,
-                totalHivePower: formatHivePower(totalHp)
-              });
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error processing known stakeholders:", error);
-    }
-    
-    // APPROACH 3: Get all active witnesses and check if they voted
-    // Witnesses often vote for each other
-    try {
-      const response = await fetch(apiNode, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          "jsonrpc": "2.0",
-          "method": "condenser_api.get_witnesses_by_vote",
-          "params": ["", 150],
-          "id": 4
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const witnesses = data.result || [];
-        
-        // Get all witness account names
-        const witnessNames = witnesses.map((w: any) => w.owner);
-        
-        // Fetch witness accounts
-        if (witnessNames.length > 0) {
-          // Process in batches of 50
-          const batchSize = 50;
-          for (let i = 0; i < witnessNames.length; i += batchSize) {
-            const batch = witnessNames.slice(i, i + batchSize);
-            
-            const accountsResponse = await fetch(apiNode, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                "jsonrpc": "2.0",
-                "method": "condenser_api.get_accounts",
-                "params": [batch],
-                "id": 5
-              })
-            });
-            
-            if (accountsResponse.ok) {
-              const accountsData = await accountsResponse.json();
-              const accounts = accountsData.result || [];
-              
-              // Process voters
-              for (const account of accounts) {
-                if (account.witness_votes && account.witness_votes.includes(witnessName)) {
-                  // Skip if already in the map
-                  if (votersMap.has(account.name)) continue;
-                  
-                  // Calculate Hive Power
-                  const vestingShares = parseFloat(account.vesting_shares.split(' ')[0]);
-                  const hivePower = vestingShares * vestToHpRatio;
-                  
-                  // Calculate proxied HP
-                  let proxiedHp = 0;
-                  let proxiedHivePower = undefined;
-                  
-                  if (account.proxied_vsf_votes && Array.isArray(account.proxied_vsf_votes)) {
-                    let totalProxiedVests = 0;
-                    for (const vests of account.proxied_vsf_votes) {
-                      totalProxiedVests += parseFloat(vests) / 1000000;
-                    }
-                    proxiedHp = totalProxiedVests * vestToHpRatio;
-                    
-                    if (proxiedHp > 0) {
-                      proxiedHivePower = formatHivePower(proxiedHp);
-                    }
-                  }
-                  
-                  // Calculate total HP
-                  const totalHp = hivePower + proxiedHp;
-                  
-                  votersMap.set(account.name, {
-                    username: account.name,
-                    profileImage: `https://images.hive.blog/u/${account.name}/avatar`,
-                    hivePower: formatHivePower(hivePower),
-                    proxiedHivePower,
-                    totalHivePower: formatHivePower(totalHp)
-                  });
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching witnesses as voters:", error);
-    }
-    
-    // APPROACH 4: Get additional top HP accounts using a different API method
-    try {
-      // Get top 500 accounts by effective vesting
-      const response = await fetch(apiNode, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          "jsonrpc": "2.0",
-          "method": "condenser_api.lookup_accounts",
-          "params": ["", 1000],
-          "id": 6
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const accountNames = data.result || [];
-        
-        // Process in batches of 50
-        const batchSize = 50;
-        for (let i = 0; i < accountNames.length; i += batchSize) {
-          const batch = accountNames.slice(i, i + batchSize);
-          
-          const accountsResponse = await fetch(apiNode, {
-            method: 'POST',
+    while (hasMorePages) {
+      try {
+        const response = await fetch(
+          `https://api.syncad.com/hafbe-api/witnesses/${witnessName}/voters?page=${page}&page-size=${pageSize}&sort=vests&direction=desc`,
+          {
+            method: 'GET',
             headers: {
               'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              "jsonrpc": "2.0",
-              "method": "condenser_api.get_accounts",
-              "params": [batch],
-              "id": 7
-            })
-          });
-          
-          if (accountsResponse.ok) {
-            const accountsData = await accountsResponse.json();
-            const accounts = accountsData.result || [];
-            
-            // Sort accounts by vesting shares to focus on high HP accounts
-            accounts.sort((a: any, b: any) => {
-              const aVests = parseFloat(a.vesting_shares.split(' ')[0]);
-              const bVests = parseFloat(b.vesting_shares.split(' ')[0]);
-              return bVests - aVests;
-            });
-            
-            // Only process top accounts in this batch
-            const topAccounts = accounts.slice(0, 25); // Top 25 from each batch
-            
-            // Process voters
-            for (const account of topAccounts) {
-              if (account.witness_votes && account.witness_votes.includes(witnessName)) {
-                // Skip if already in the map
-                if (votersMap.has(account.name)) continue;
-                
-                // Calculate Hive Power
-                const vestingShares = parseFloat(account.vesting_shares.split(' ')[0]);
-                const hivePower = vestingShares * vestToHpRatio;
-                
-                // Calculate proxied HP
-                let proxiedHp = 0;
-                let proxiedHivePower = undefined;
-                
-                if (account.proxied_vsf_votes && Array.isArray(account.proxied_vsf_votes)) {
-                  let totalProxiedVests = 0;
-                  for (const vests of account.proxied_vsf_votes) {
-                    totalProxiedVests += parseFloat(vests) / 1000000;
-                  }
-                  proxiedHp = totalProxiedVests * vestToHpRatio;
-                  
-                  if (proxiedHp > 0) {
-                    proxiedHivePower = formatHivePower(proxiedHp);
-                  }
-                }
-                
-                // Calculate total HP
-                const totalHp = hivePower + proxiedHp;
-                
-                votersMap.set(account.name, {
-                  username: account.name,
-                  profileImage: `https://images.hive.blog/u/${account.name}/avatar`,
-                  hivePower: formatHivePower(hivePower),
-                  proxiedHivePower,
-                  totalHivePower: formatHivePower(totalHp)
-                });
-              }
             }
           }
+        );
+        
+        if (!response.ok) {
+          console.error(`HAF-BE API error: ${response.status} ${response.statusText}`);
+          break;
         }
+        
+        const data = await response.json();
+        
+        // Store total votes count from first page
+        if (page === 1) {
+          totalVotes = data.total_votes || 0;
+          console.log(`Total voters for ${witnessName}: ${totalVotes}`);
+        }
+        
+        // Process voters from this page
+        for (const voter of data.voters || []) {
+          // Convert VESTS to HP
+          const accountVests = parseFloat(voter.account_vests) / 1000000;
+          const proxiedVests = parseFloat(voter.proxied_vests) / 1000000;
+          const totalVests = parseFloat(voter.vests) / 1000000;
+          
+          const accountHP = accountVests * vestToHpRatio;
+          const proxiedHP = proxiedVests * vestToHpRatio;
+          const totalHP = totalVests * vestToHpRatio;
+          
+          voters.push({
+            username: voter.voter_name,
+            profileImage: `https://images.hive.blog/u/${voter.voter_name}/avatar`,
+            hivePower: formatHivePower(accountHP),
+            proxiedHivePower: proxiedHP > 0 ? formatHivePower(proxiedHP) : undefined,
+            totalHivePower: formatHivePower(totalHP)
+          });
+        }
+        
+        // Check if there are more pages
+        hasMorePages = page < (data.total_pages || 1);
+        page++;
+        
+        // Limit to reasonable number of pages (prevent infinite loops)
+        if (page > 100) {
+          console.warn("Reached page limit, stopping pagination");
+          break;
+        }
+        
+      } catch (error) {
+        console.error(`Error fetching page ${page}:`, error);
+        break;
       }
-    } catch (error) {
-      console.error("Error processing additional top accounts:", error);
     }
     
-    // Convert map to array
-    let voters = Array.from(votersMap.values());
+    console.log(`Fetched ${voters.length} voters for witness ${witnessName}`);
     
-    console.log(`Found ${voters.length} voters for witness ${witnessName}`);
-    
-    // Get the witness data to find total votes
-    let witnessData = null;
+    // Get the witness data to find total votes for percentage calculation
+    let totalWitnessVotesHP = 0;
     try {
       const witnessResponse = await fetch(apiNode, {
         method: 'POST',
@@ -1539,43 +1242,26 @@ export const getWitnessVoters = async (witnessName: string): Promise<WitnessVote
           "jsonrpc": "2.0",
           "method": "condenser_api.get_witness_by_account",
           "params": [witnessName],
-          "id": 8
+          "id": 2
         })
       });
       
       if (witnessResponse.ok) {
-        const witnessDataResponse = await witnessResponse.json();
-        witnessData = witnessDataResponse.result;
+        const witnessData = await witnessResponse.json();
+        if (witnessData.result && witnessData.result.votes) {
+          // votes field is in VESTS (but stored as a large integer)
+          const votesInVests = parseFloat(witnessData.result.votes) / 1000000;
+          totalWitnessVotesHP = votesInVests * vestToHpRatio;
+          console.log(`Witness ${witnessName} total votes: ${totalWitnessVotesHP.toLocaleString()} HP`);
+        }
       }
     } catch (error) {
       console.error(`Error fetching witness data for percentage calculation:`, error);
     }
     
-    // Calculate total votes in VESTS and convert to HP
-    let totalWitnessVotesHP = 0;
-    if (witnessData && witnessData.votes) {
-      // votes field is in VESTS (but stored as a large integer)
-      const votesInVests = parseFloat(witnessData.votes) / 1000000; // Convert from micro-vests
-      totalWitnessVotesHP = votesInVests * vestToHpRatio;
-      console.log(`Witness ${witnessName} total votes: ${totalWitnessVotesHP.toLocaleString()} HP`);
-    }
-    
-    // Sort by Total Hive Power (own + proxied) in descending order
-    voters = voters.sort((a: WitnessVoter, b: WitnessVoter) => {
-      const aOwnHP = parseFloat(a.hivePower.replace(/[^0-9.]/g, ''));
-      const aProxiedHP = a.proxiedHivePower ? parseFloat(a.proxiedHivePower.replace(/[^0-9.]/g, '')) : 0;
-      const aTotalHP = aOwnHP + aProxiedHP;
-      
-      const bOwnHP = parseFloat(b.hivePower.replace(/[^0-9.]/g, ''));
-      const bProxiedHP = b.proxiedHivePower ? parseFloat(b.proxiedHivePower.replace(/[^0-9.]/g, '')) : 0;
-      const bTotalHP = bOwnHP + bProxiedHP;
-      
-      return bTotalHP - aTotalHP;
-    });
-    
     // Calculate percentage for each voter
     if (totalWitnessVotesHP > 0) {
-      voters = voters.map(voter => {
+      return voters.map(voter => {
         const ownHP = parseFloat(voter.hivePower.replace(/[^0-9.]/g, ''));
         const proxiedHP = voter.proxiedHivePower ? parseFloat(voter.proxiedHivePower.replace(/[^0-9.]/g, '')) : 0;
         const totalVoterHP = ownHP + proxiedHP;

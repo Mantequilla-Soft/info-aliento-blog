@@ -1,20 +1,38 @@
 /**
- * HAF SQL API Client
- * Public HAF SQL API: https://hafsql-api.mahdiyari.info/
+ * HAFBE API Client (HAF Block Explorer)
+ * Public HAFBE API: https://api.syncad.com/hafbe-api/
  * 
  * This module provides functions to query historical blockchain data
- * from the HAF SQL API for analytics purposes.
+ * from the HAFBE API for analytics purposes.
+ * 
+ * HAFBE provides richer data than raw HAF SQL including:
+ * - Vote operations with vesting shares (HP)
+ * - Accurate timestamps from blockchain
+ * - Pagination support
+ * - Complete witness statistics
  */
 
-const HAFSQL_API = 'https://hafsql-api.mahdiyari.info';
+const HAFBE_API = 'https://api.syncad.com/hafbe-api';
 
 export interface WitnessVoteOperation {
-  block_num: number;
-  id: string;
-  account: string;
-  witness: string;
-  approve: boolean;
-  timestamp?: string;
+  voter_name: string;  // Account that voted
+  approve: boolean;    // true = vote, false = unvote
+  vests: string;       // Total vesting shares at vote time
+  account_vests: string; // Account's own vesting shares
+  proxied_vests: string; // Proxied vesting shares
+  timestamp: string;   // Blockchain timestamp
+  
+  // Legacy fields for backward compatibility
+  block_num?: number;
+  id?: string;
+  account?: string;
+  witness?: string;
+}
+
+export interface ProxyDelegator {
+  account: string;          // Account that delegated proxy
+  proxy_date: string;       // When they set the proxy
+  proxied_vests: string;    // Total vesting power contributed
 }
 
 export interface DailyVoteCount {
@@ -22,21 +40,39 @@ export interface DailyVoteCount {
   approvals: number;
   removals: number;
   net: number;
+  hpGained: number;    // Total HP from new votes
+  hpLost: number;      // Total HP from unvotes
+  hpNetChange: number; // Net HP change
 }
 
 /**
- * Get dynamic global properties including current block number
+ * Get the global VESTS to HP conversion ratio
  */
-export async function getDynamicGlobalProperties() {
+export async function getVestsToHPRatio(): Promise<number> {
   try {
-    const response = await fetch(`${HAFSQL_API}/chain/dynamic-global-properties`);
-    if (!response.ok) {
-      throw new Error(`HAF SQL API error: ${response.status}`);
-    }
-    return await response.json();
+    // Fetch from main Hive API (you can replace with your existing cached value)
+    const response = await fetch('https://api.hive.blog', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'condenser_api.get_dynamic_global_properties',
+        params: [],
+        id: 1
+      })
+    });
+    
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    
+    const { result } = await response.json();
+    const totalVestingFund = parseFloat(result.total_vesting_fund_hive.split(' ')[0]);
+    const totalVestingShares = parseFloat(result.total_vesting_shares.split(' ')[0]);
+    
+    return totalVestingFund / totalVestingShares;
   } catch (error) {
-    console.error('Error fetching dynamic global properties from HAF SQL:', error);
-    throw error;
+    console.error('Error fetching VESTS to HP ratio:', error);
+    // Fallback ratio if API fails
+    return 0.000494;
   }
 }
 
@@ -45,42 +81,41 @@ export async function getDynamicGlobalProperties() {
  * 
  * @param witnessName - The witness account name
  * @param hours - Number of hours to look back (default: 24)
- * @returns Array of witness vote operations
+ * @param pageSize - Number of results per page (default: 100)
+ * @returns Array of witness vote operations with HP data
  */
 export async function getRecentWitnessVotes(
   witnessName: string,
-  hours: number = 24
+  hours: number = 24,
+  pageSize: number = 100
 ): Promise<WitnessVoteOperation[]> {
   try {
-    // Get current block number
-    const dgp = await getDynamicGlobalProperties();
-    const currentBlock = dgp.block_num;
+    console.log(`Fetching witness votes from HAFBE API for ${witnessName}`);
     
-    // Calculate block range (3 seconds per block = 1200 blocks per hour)
-    const blocksPerHour = 1200;
-    const startBlock = currentBlock - (blocksPerHour * hours);
-    
-    console.log(`Fetching witness votes from HAF SQL: blocks ${startBlock} to ${currentBlock}`);
-    
-    // Fetch operations
+    // Fetch from HAFBE API - votes are sorted by timestamp DESC (most recent first)
     const response = await fetch(
-      `${HAFSQL_API}/operations/by-range/account_witness_vote?block_range=${startBlock}-${currentBlock}`
+      `${HAFBE_API}/witnesses/${witnessName}/votes/history?page=1&page-size=${pageSize}`
     );
     
     if (!response.ok) {
-      throw new Error(`HAF SQL API error: ${response.status}`);
+      throw new Error(`HAFBE API error: ${response.status}`);
     }
     
-    const allVotes: WitnessVoteOperation[] = await response.json();
+    const data = await response.json();
+    const allVotes: WitnessVoteOperation[] = data.votes_history || [];
     
-    console.log(`Found ${allVotes.length} total witness vote operations`);
+    console.log(`Found ${allVotes.length} total votes, filtering by ${hours}h`);
     
-    // Filter for this specific witness
-    const witnessVotes = allVotes.filter(v => v.witness === witnessName);
+    // Filter by time range
+    const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const recentVotes = allVotes.filter(vote => {
+      const voteTime = new Date(vote.timestamp);
+      return voteTime >= cutoffTime;
+    });
     
-    console.log(`Found ${witnessVotes.length} votes for witness ${witnessName}`);
+    console.log(`Found ${recentVotes.length} votes in the last ${hours} hours`);
     
-    return witnessVotes;
+    return recentVotes;
   } catch (error) {
     console.error(`Error fetching recent witness votes for ${witnessName}:`, error);
     return [];
@@ -99,30 +134,46 @@ export async function getWitnessVoteTrends(
   days: number = 7
 ): Promise<DailyVoteCount[]> {
   try {
-    const votes = await getRecentWitnessVotes(witnessName, days * 24);
+    // Fetch more votes to ensure we get all votes in the time range
+    // Year view needs 1000 results, others use 500
+    const pageSize = days >= 365 ? 1000 : 500;
+    const votes = await getRecentWitnessVotes(witnessName, days * 24, pageSize);
+    
+    // Get VESTS to HP ratio
+    const vestsToHp = await getVestsToHPRatio();
     
     // Group by day
     const byDay: Record<string, DailyVoteCount> = {};
     
     for (const vote of votes) {
-      // Estimate timestamp from block number
-      // Block 0 was at 2016-03-24T16:05:00Z
-      // Each block is 3 seconds
-      const genesisBlock = 0;
-      const genesisTimestamp = new Date('2016-03-24T16:05:00Z').getTime();
-      const estimatedTimestamp = genesisTimestamp + (vote.block_num - genesisBlock) * 3000;
-      const date = new Date(estimatedTimestamp).toISOString().split('T')[0];
+      // Use the actual timestamp from HAFBE API
+      const date = vote.timestamp.split('T')[0];
+      
+      // Convert VESTS to HP
+      const voteHP = parseFloat(vote.vests || '0') * vestsToHp / 1000000;
       
       if (!byDay[date]) {
-        byDay[date] = { date, approvals: 0, removals: 0, net: 0 };
+        byDay[date] = { 
+          date, 
+          approvals: 0, 
+          removals: 0, 
+          net: 0,
+          hpGained: 0,
+          hpLost: 0,
+          hpNetChange: 0
+        };
       }
       
       if (vote.approve) {
         byDay[date].approvals++;
         byDay[date].net++;
+        byDay[date].hpGained += voteHP;
+        byDay[date].hpNetChange += voteHP;
       } else {
         byDay[date].removals++;
         byDay[date].net--;
+        byDay[date].hpLost += voteHP;
+        byDay[date].hpNetChange -= voteHP;
       }
     }
     
@@ -155,5 +206,49 @@ export async function getRecentVoteCount(witnessName: string): Promise<{ approva
   } catch (error) {
     console.error(`Error fetching recent vote count for ${witnessName}:`, error);
     return { approvals: 0, removals: 0, net: 0 };
+  }
+}
+
+/**
+ * Get list of accounts that have proxied their voting power to a specific account
+ * 
+ * @param accountName - The proxy account name
+ * @param page - Page number (default: 1, 100 results per page)
+ * @returns Array of proxy delegators with their voting power
+ */
+export async function getProxyDelegators(
+  accountName: string,
+  page: number = 1
+): Promise<{ delegators: ProxyDelegator[]; total: number; totalPages: number }> {
+  try {
+    console.log(`Fetching proxy delegators for ${accountName} from HAFBE API`);
+    
+    const response = await fetch(
+      `${HAFBE_API}/accounts/${accountName}/proxy-power?page=${page}`
+    );
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        // Account has no proxy delegators
+        return { delegators: [], total: 0, totalPages: 0 };
+      }
+      throw new Error(`HAFBE API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // API returns array directly, not an object
+    if (Array.isArray(data)) {
+      return {
+        delegators: data,
+        total: data.length,
+        totalPages: 1
+      };
+    }
+    
+    return { delegators: [], total: 0, totalPages: 0 };
+  } catch (error) {
+    console.error(`Error fetching proxy delegators for ${accountName}:`, error);
+    return { delegators: [], total: 0, totalPages: 0 };
   }
 }

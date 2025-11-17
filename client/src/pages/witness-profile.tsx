@@ -16,6 +16,8 @@ import VoteModal from '@/components/modals/VoteModal';
 import LoginModal from '@/components/modals/LoginModal';
 import ProxyAccountsModal from '@/components/modals/ProxyAccountsModal';
 import RecentActivity from '@/components/RecentActivity';
+import VoteTrends from '@/components/VoteTrends';
+import ProxyModal from '@/components/ProxyModal';
 import { ExternalLink } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
@@ -31,8 +33,11 @@ export default function WitnessProfile() {
   const [, setLocation] = useLocation();
   const [voteModalOpen, setVoteModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile');
   const [isUnvoteAction, setIsUnvoteAction] = useState(false);
+  const [proxyModalOpen, setProxyModalOpen] = useState(false);
+  const [selectedProxyAccount, setSelectedProxyAccount] = useState<string>('');
+  const [selectedProxyHP, setSelectedProxyHP] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>('profile');
   
   // Helper function to check if the user has already voted for this witness
   const hasVotedForWitness = (): boolean => {
@@ -46,31 +51,45 @@ export default function WitnessProfile() {
   // Pagination for witness votes
   const { paginatedItems: paginatedWitnessVotes, currentPage: votesPage, totalPages: votesTotalPages, nextPage: votesNextPage, prevPage: votesPrevPage, goToPage: votesGoToPage } = usePagination(witnessVotes, 10);
   
-  // Prepare pie chart data (top 10 voters + others)
+  // Prepare pie chart data (top 10 voters only, no "Others" category needed)
   const pieChartData = (() => {
     if (voters.length === 0) return [];
     
-    // Calculate total percentage of visible voters
-    const totalVisiblePercentage = voters.reduce((sum, voter) => sum + (voter.percentage || 0), 0);
-    
-    // Get top 9 voters
-    const topVoters = voters.slice(0, 9).map(voter => ({
+    // Get top 10 voters (we have all voter data now from HAF-BE API)
+    const topVoters = voters.slice(0, 10).map(voter => ({
       name: voter.username,
       value: voter.percentage || 0,
       hp: voter.totalHivePower || voter.hivePower
     }));
     
-    // Add "Others" category
-    const othersPercentage = 100 - totalVisiblePercentage;
-    if (othersPercentage > 0) {
-      topVoters.push({
-        name: 'Others (not shown)',
-        value: parseFloat(othersPercentage.toFixed(2)),
-        hp: 'Unknown'
-      });
-    }
-    
     return topVoters;
+  })();
+  
+  // Calculate voter statistics
+  const voterStats = (() => {
+    if (voters.length === 0) return null;
+    
+    // Total HP calculation
+    let totalHP = 0;
+    voters.forEach(voter => {
+      const ownHP = parseFloat(voter.hivePower.replace(/[^0-9.]/g, ''));
+      const proxiedHP = voter.proxiedHivePower ? parseFloat(voter.proxiedHivePower.replace(/[^0-9.]/g, '')) : 0;
+      totalHP += (ownHP + proxiedHP);
+    });
+    
+    const avgHP = totalHP / voters.length;
+    const topVoterPercentage = voters[0]?.percentage || 0;
+    
+    // Count voters with proxied power
+    const votersWithProxy = voters.filter(v => v.proxiedHivePower && parseFloat(v.proxiedHivePower.replace(/[^0-9.]/g, '')) > 0).length;
+    
+    return {
+      totalVoters: voters.length,
+      totalHP: totalHP.toFixed(2),
+      avgHP: avgHP.toFixed(2),
+      topVoterPercentage: topVoterPercentage.toFixed(2),
+      votersWithProxy
+    };
   })();
   
   // Colors for pie chart - More vibrant and distinguishable palette
@@ -123,17 +142,18 @@ export default function WitnessProfile() {
   }
   
   return (
-    <section className="py-12 md:py-16">
+    <section className="py-8 md:py-12 lg:py-16">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
           {/* Left column with witness profile */}
           <div className="lg:col-span-1">
-            <Card className="mb-8">
+            {/* Profile Card */}
+            <Card className="mb-6">
               <CardHeader className="pb-4">
-                <CardTitle className="text-2xl flex justify-between items-center">
+                <CardTitle className="text-xl flex flex-col gap-2">
                   <span>{t('profile.title')}</span>
                   {!isLoading && witness && (
-                    <Badge variant="secondary" className="ml-2 text-secondary-foreground">
+                    <Badge variant="secondary" className="w-fit text-secondary-foreground">
                       {t('profile.rank')} #{witness.rank}
                     </Badge>
                   )}
@@ -143,50 +163,84 @@ export default function WitnessProfile() {
               <CardContent>
                 {isLoading ? (
                   <div className="flex flex-col items-center space-y-4">
-                    <Skeleton className="h-24 w-24 rounded-full" />
-                    <Skeleton className="h-6 w-48" />
-                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-20 w-20 rounded-full" />
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-3 w-24" />
                     <div className="w-full mt-4">
                       <Skeleton className="h-10 w-full" />
                     </div>
                   </div>
                 ) : witness ? (
                   <div className="flex flex-col items-center">
-                    <Avatar className="h-24 w-24">
+                    <Avatar className="h-20 w-20">
                       <AvatarImage src={witness.profileImage} alt={witness.name} />
                       <AvatarFallback>{witness.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     
-                    <h2 className="text-xl font-bold mt-4">@{witness.name}</h2>
-                    <p className="text-muted-foreground">{t('profile.activeSince')} {new Date(witness.created).toLocaleDateString()}</p>
+                    <h2 className="text-lg font-bold mt-3">@{witness.name}</h2>
+                    <p className="text-xs text-muted-foreground text-center">{t('profile.activeSince')} {new Date(witness.created).toLocaleDateString()}</p>
                     
                     <Button 
-                      className={`w-full mt-6 ${hasVotedForWitness() ? 'bg-muted text-muted-foreground hover:bg-muted/80' : ''}`}
+                      className={`w-full mt-4 ${hasVotedForWitness() ? 'bg-muted text-muted-foreground hover:bg-muted/80' : ''}`}
                       onClick={handleVoteClick}
                       variant={hasVotedForWitness() ? "outline" : "default"}
+                      size="sm"
                     >
-                      <span className="material-symbols-outlined mr-2">how_to_vote</span>
+                      <span className="material-symbols-outlined mr-2 text-sm">how_to_vote</span>
                       {hasVotedForWitness() ? t('witnesses.unvote') : t('profile.voteFor')}
                     </Button>
                   </div>
                 ) : (
-                  <p className="text-center text-muted-foreground">Failed to load witness data.</p>
+                  <p className="text-center text-muted-foreground text-sm">Failed to load witness data.</p>
                 )}
               </CardContent>
             </Card>
+            
+            {/* Voter Statistics Card - Only show in Voters tab */}
+            {activeTab === 'voters' && voterStats && !isLoadingVoters && (
+              <Card className="hidden lg:block">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Voter Statistics</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Total Voters</span>
+                    <span className="text-sm font-bold">{voterStats.totalVoters.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Avg HP/Voter</span>
+                    <span className="text-sm font-medium">{parseFloat(voterStats.avgHP).toLocaleString()} HP</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Top Voter</span>
+                    <Badge variant="secondary" className="text-xs">{voterStats.topVoterPercentage}%</Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">With Proxy</span>
+                    <span className="text-sm font-medium">{voterStats.votersWithProxy}</span>
+                  </div>
+                  <div className="pt-2 border-t">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">Total HP</span>
+                      <span className="text-sm font-bold text-primary">{parseFloat(voterStats.totalHP).toLocaleString()} HP</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
           
           {/* Right column with tabs for additional info */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <Card>
               <Tabs defaultValue="profile" onValueChange={setActiveTab} value={activeTab}>
                 <CardHeader className="pb-0">
-                  <TabsList className="grid grid-cols-5">
-                    <TabsTrigger value="profile">{t('profile.about')}</TabsTrigger>
-                    <TabsTrigger value="stats">{t('profile.stats')}</TabsTrigger>
-                    <TabsTrigger value="voting">Voting</TabsTrigger>
-                    <TabsTrigger value="voters">{t('profile.voters')}</TabsTrigger>
-                    <TabsTrigger value="activity">Activity</TabsTrigger>
+                  <TabsList className="grid grid-cols-5 w-full">
+                    <TabsTrigger value="profile" className="text-xs sm:text-sm">{t('profile.about')}</TabsTrigger>
+                    <TabsTrigger value="stats" className="text-xs sm:text-sm">{t('profile.stats')}</TabsTrigger>
+                    <TabsTrigger value="voting" className="text-xs sm:text-sm">Voting</TabsTrigger>
+                    <TabsTrigger value="voters" className="text-xs sm:text-sm">{t('profile.voters')}</TabsTrigger>
+                    <TabsTrigger value="activity" className="text-xs sm:text-sm">Activity</TabsTrigger>
                   </TabsList>
                 </CardHeader>
                 
@@ -387,12 +441,7 @@ export default function WitnessProfile() {
                   
                   <TabsContent value="voters" className="mt-0">
                     <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-semibold">{t('profile.votersTitle')}</h3>
-                        <Badge variant="outline" className="text-sm">
-                          Showing top voters (major HP holders)
-                        </Badge>
-                      </div>
+                      <h3 className="text-xl font-semibold mb-6">{t('profile.votersTitle')}</h3>
                       
                       {/* Pie Chart */}
                       {!isLoadingVoters && voters.length > 0 && pieChartData.length > 0 && (
@@ -400,111 +449,63 @@ export default function WitnessProfile() {
                           <CardHeader>
                             <CardTitle className="text-lg">Voting Power Distribution</CardTitle>
                             <CardDescription>
-                              Distribution of voting power among major stakeholders (top visible voters)
+                              Distribution of voting power among top 10 voters (by governance power)
                             </CardDescription>
                           </CardHeader>
                           <CardContent>
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                              {/* Pie Chart */}
-                              <div className="lg:col-span-2">
-                                <ResponsiveContainer width="100%" height={400}>
-                                  <PieChart>
-                                    <Pie
-                                      data={pieChartData}
-                                      cx="50%"
-                                      cy="50%"
-                                      labelLine={true}
-                                      label={({ name, value, percent }) => {
-                                        // Only show label if percentage is > 2% to avoid clutter
-                                        if (value > 2) {
-                                          return `${name.length > 15 ? name.substring(0, 12) + '...' : name} (${value}%)`;
-                                        }
-                                        return '';
-                                      }}
-                                      outerRadius={120}
-                                      innerRadius={60}
-                                      fill="#8884d8"
-                                      dataKey="value"
-                                      paddingAngle={2}
-                                      animationBegin={0}
-                                      animationDuration={800}
-                                    >
-                                      {pieChartData.map((entry, index) => (
-                                        <Cell 
-                                          key={`cell-${index}`} 
-                                          fill={COLORS[index % COLORS.length]}
-                                          stroke="rgba(255,255,255,0.8)"
-                                          strokeWidth={2}
-                                        />
-                                      ))}
-                                    </Pie>
-                                    <Tooltip 
-                                      contentStyle={{
-                                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                        border: '1px solid #ccc',
-                                        borderRadius: '8px',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                                      }}
-                                      formatter={(value: any, name: any, props: any) => [
-                                        `${value}% (${props.payload.hp})`,
-                                        name
-                                      ]}
-                                    />
-                                  </PieChart>
-                                </ResponsiveContainer>
-                              </div>
-                              
-                              {/* Legend with Details */}
-                              <div className="space-y-2">
-                                <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Top Voters</h4>
-                                <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+                            <ResponsiveContainer width="100%" height={400} className="sm:h-[450px] md:h-[500px]">
+                              <PieChart>
+                                <Pie
+                                  data={pieChartData}
+                                  cx="50%"
+                                  cy="50%"
+                                  labelLine={true}
+                                  label={({ name, value }) => {
+                                    // Show label if percentage is > 1.5% to avoid clutter
+                                    if (value > 1.5) {
+                                      return `${name.length > 15 ? name.substring(0, 12) + '...' : name} (${value}%)`;
+                                    }
+                                    return '';
+                                  }}
+                                  outerRadius={140}
+                                  innerRadius={70}
+                                  fill="#8884d8"
+                                  dataKey="value"
+                                  paddingAngle={2}
+                                  animationBegin={0}
+                                  animationDuration={800}
+                                >
                                   {pieChartData.map((entry, index) => (
-                                    <button
-                                      key={index}
-                                      onClick={() => {
-                                        if (entry.name !== 'Others (not shown)') {
-                                          setLocation(`/@${entry.name}`);
-                                        }
-                                      }}
-                                      disabled={entry.name === 'Others (not shown)'}
-                                      className={`flex items-center justify-between p-2 rounded-lg w-full text-left transition-colors ${
-                                        entry.name === 'Others (not shown)' 
-                                          ? 'bg-muted/20 cursor-default' 
-                                          : 'hover:bg-muted/40 cursor-pointer'
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        <div 
-                                          className="w-3 h-3 rounded-full flex-shrink-0" 
-                                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                                        />
-                                        <span className="text-sm font-medium truncate">
-                                          {entry.name === 'Others (not shown)' ? 'Others' : `@${entry.name}`}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                        <span className="text-xs text-muted-foreground">{entry.hp}</span>
-                                        <Badge variant="secondary" className="text-xs">
-                                          {entry.value}%
-                                        </Badge>
-                                      </div>
-                                    </button>
+                                    <Cell 
+                                      key={`cell-${index}`} 
+                                      fill={COLORS[index % COLORS.length]}
+                                      stroke="rgba(255,255,255,0.8)"
+                                      strokeWidth={2}
+                                    />
                                   ))}
-                                </div>
-                              </div>
-                            </div>
+                                </Pie>
+                                <Tooltip 
+                                  contentStyle={{
+                                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                                  }}
+                                  formatter={(value: any, name: any, props: any) => [
+                                    `${value}% (${props.payload.hp})`,
+                                    name
+                                  ]}
+                                />
+                                <Legend 
+                                  verticalAlign="bottom" 
+                                  height={36}
+                                  formatter={(value) => `@${value}`}
+                                />
+                              </PieChart>
+                            </ResponsiveContainer>
                           </CardContent>
                         </Card>
                       )}
-                      
-                      {/* Info Note */}
-                      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-                        <p className="text-sm text-blue-900 dark:text-blue-100">
-                          <strong>Note:</strong> This list shows only major HP holders voting for this witness. 
-                          To see ALL voters, HAF SQL infrastructure is required. The displayed voters typically 
-                          represent 80-90% of the total voting power.
-                        </p>
-                      </div>
                       
                       {isLoadingVoters ? (
                         <div className="space-y-4">
@@ -520,17 +521,18 @@ export default function WitnessProfile() {
                         </div>
                       ) : voters.length > 0 ? (
                         <>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-[100px]">{t('profile.account')}</TableHead>
-                                <TableHead>{t('profile.username')}</TableHead>
-                                <TableHead className="text-right">{t('profile.ownHP')}</TableHead>
-                                <TableHead className="text-right">{t('profile.proxiedHP')}</TableHead>
-                                <TableHead className="text-right">{t('profile.totalGov')}</TableHead>
-                                <TableHead className="text-right">% of Total</TableHead>
-                              </TableRow>
-                            </TableHeader>
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-[60px] sm:w-[100px]">{t('profile.account')}</TableHead>
+                                  <TableHead className="min-w-[120px]">{t('profile.username')}</TableHead>
+                                  <TableHead className="text-right min-w-[100px]">{t('profile.ownHP')}</TableHead>
+                                  <TableHead className="text-right min-w-[100px] hidden sm:table-cell">{t('profile.proxiedHP')}</TableHead>
+                                  <TableHead className="text-right min-w-[120px]">{t('profile.totalGov')}</TableHead>
+                                  <TableHead className="text-right min-w-[80px]">% of Total</TableHead>
+                                </TableRow>
+                              </TableHeader>
                             <TableBody>
                               {paginatedVoters.map((voter) => (
                                 <TableRow key={voter.username}>
@@ -548,11 +550,25 @@ export default function WitnessProfile() {
                                       @{voter.username}
                                     </button>
                                   </TableCell>
-                                  <TableCell className="text-right font-medium">{voter.hivePower}</TableCell>
-                                  <TableCell className="text-right font-medium">
-                                    {voter.proxiedHivePower ? voter.proxiedHivePower : "-"}
+                                  <TableCell className="text-right font-medium text-sm">{voter.hivePower}</TableCell>
+                                  <TableCell className="text-right font-medium text-sm hidden sm:table-cell">
+                                    {voter.proxiedHivePower && voter.proxiedHivePower !== '-' ? (
+                                      <button
+                                        onClick={() => {
+                                          setSelectedProxyAccount(voter.username);
+                                          setSelectedProxyHP(voter.proxiedHivePower || '');
+                                          setProxyModalOpen(true);
+                                        }}
+                                        className="text-primary hover:underline inline-flex items-center gap-1"
+                                      >
+                                        {voter.proxiedHivePower}
+                                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                        </svg>
+                                      </button>
+                                    ) : '-'}
                                   </TableCell>
-                                  <TableCell className="text-right font-medium text-primary">
+                                  <TableCell className="text-right font-medium text-primary text-sm">
                                     {voter.totalHivePower || (() => {
                                       // Calculate total governance vote (own + proxied) if not already provided
                                       const ownHP = parseFloat(voter.hivePower.replace(/[^0-9.]/g, ''));
@@ -565,13 +581,14 @@ export default function WitnessProfile() {
                                   </TableCell>
                                   <TableCell className="text-right font-medium">
                                     {voter.percentage ? (
-                                      <Badge variant="secondary">{voter.percentage}%</Badge>
+                                      <Badge variant="secondary" className="text-xs">{voter.percentage}%</Badge>
                                     ) : '-'}
                                   </TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
                           </Table>
+                          </div>
                           
                           {totalPages > 1 && (
                             <Pagination className="mt-6">
@@ -623,9 +640,13 @@ export default function WitnessProfile() {
                   </TabsContent>
                   
                   <TabsContent value="activity" className="mt-0">
-                    <div>
-                      <h3 className="text-xl font-semibold mb-4">Recent Voting Activity</h3>
-                      <RecentActivity witnessName={witnessName} />
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-xl font-semibold mb-4">Recent Voting Activity</h3>
+                        <RecentActivity witnessName={witnessName} />
+                      </div>
+                      
+                      <VoteTrends witnessName={witnessName} />
                     </div>
                   </TabsContent>
                 </CardContent>
@@ -648,6 +669,13 @@ export default function WitnessProfile() {
       <LoginModal 
         open={loginModalOpen} 
         onClose={() => setLoginModalOpen(false)} 
+      />
+      
+      <ProxyModal
+        open={proxyModalOpen}
+        onClose={() => setProxyModalOpen(false)}
+        accountName={selectedProxyAccount}
+        totalProxiedHP={selectedProxyHP}
       />
     </section>
   );
