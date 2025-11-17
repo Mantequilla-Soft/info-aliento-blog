@@ -230,7 +230,13 @@ export async function getProxyDelegators(
     if (!response.ok) {
       if (response.status === 404) {
         // Account has no proxy delegators
+        console.log(`No proxy delegators found for ${accountName} (404)`);
         return { delegators: [], total: 0, totalPages: 0 };
+      }
+      if (response.status === 503) {
+        // Service unavailable
+        console.warn(`HAFBE API temporarily unavailable (503)`);
+        throw new Error('API service temporarily unavailable. Please try again later.');
       }
       throw new Error(`HAFBE API error: ${response.status}`);
     }

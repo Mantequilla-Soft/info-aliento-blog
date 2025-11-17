@@ -17,6 +17,7 @@ export default function ProxyModal({ open, onClose, accountName, totalProxiedHP 
   const [delegators, setDelegators] = useState<ProxyDelegator[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [vestsToHp, setVestsToHp] = useState<number>(0.000494);
   const [, setLocation] = useLocation();
 
@@ -29,6 +30,7 @@ export default function ProxyModal({ open, onClose, accountName, totalProxiedHP 
   useEffect(() => {
     if (open && accountName) {
       setIsLoading(true);
+      setError(null);
       getProxyDelegators(accountName)
         .then(result => {
           // Sort delegators by proxied_vests (descending - highest first)
@@ -39,6 +41,10 @@ export default function ProxyModal({ open, onClose, accountName, totalProxiedHP 
           });
           setDelegators(sortedDelegators);
           setTotal(result.total);
+        })
+        .catch((err) => {
+          console.error('Error loading proxy delegators:', err);
+          setError('Unable to load proxy delegators. The API might be temporarily unavailable.');
         })
         .finally(() => setIsLoading(false));
     }
@@ -108,6 +114,17 @@ export default function ProxyModal({ open, onClose, accountName, totalProxiedHP 
                   <Skeleton className="h-4 w-20" />
                 </div>
               ))}
+            </div>
+          ) : error ? (
+            <div className="text-center py-8 text-destructive">
+              <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p className="font-semibold">Service Temporarily Unavailable</p>
+              <p className="text-sm mt-2">
+                {error}
+              </p>
+              <p className="text-xs text-muted-foreground mt-3">
+                Please try again later or check back when the API service is restored.
+              </p>
             </div>
           ) : delegators.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
