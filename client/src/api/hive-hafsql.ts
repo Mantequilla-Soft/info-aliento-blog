@@ -255,6 +255,7 @@ export async function getProxyDelegators(
     return { delegators: [], total: 0, totalPages: 0 };
   } catch (error) {
     console.error(`Error fetching proxy delegators for ${accountName}:`, error);
-    return { delegators: [], total: 0, totalPages: 0 };
+    // Re-throw the error so the UI can show it to users
+    throw error;
   }
 }
