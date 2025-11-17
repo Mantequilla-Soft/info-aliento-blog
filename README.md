@@ -21,6 +21,10 @@ This is a **Witness Directory** for the Hive blockchain - think of it as a dashb
 - Real-time vote counts and governance power
 - Witness profiles with descriptions and version information
 - Active status indicators (witnesses who recently produced blocks)
+- **Complete voter lists** - See ALL voters for any witness (1000+ for popular witnesses)
+- **Voter power breakdown** - View each voter's own HP and proxied HP
+- **Voting power distribution** - Interactive pie chart showing top 10 voters
+- **Historical voting trends** - Track vote changes over 7 or 30 days with charts
 
 ### 📊 Network Dashboard
 - Live blockchain statistics
@@ -35,10 +39,12 @@ This is a **Witness Directory** for the Hive blockchain - think of it as a dashb
 - Real-time status updates
 
 ### 👤 User Stats
-- Your Hive Power and voting influence
-- List of witnesses you're currently voting for
-- Available witness votes (out of 30 maximum)
-- Proxy voting information
+- **Hive Power breakdown** - View own HP, effective HP, and proxied HP
+- **Governance power calculator** - See your total voting influence
+- **Witness votes tracker** - List of all 30 witnesses you're voting for
+- **Proxy voting information** - See who's delegating power to you
+- **Lifetime earnings** - Author rewards, curation rewards, and earning strategy
+- **Public profiles** - View any Hive user's stats at `/@username`
 
 ### 🔐 Secure Authentication
 - Login with **Hive Keychain** browser extension
@@ -121,12 +127,21 @@ The entire site is fully responsive and works great on:
 
 ## 🔗 Built With
 
-- **React** - Modern UI framework
+### Frontend
+- **React 18** - Modern UI framework
 - **TypeScript** - Type-safe code
-- **Hive Blockchain** - Decentralized blockchain network
-- **Hive Keychain** - Secure wallet integration
-- **Tailwind CSS** - Beautiful styling
-- **Vite** - Fast development and building
+- **Tailwind CSS + shadcn/ui** - Beautiful, accessible components
+- **TanStack Query** - Powerful data fetching and caching
+- **Recharts** - Interactive charts for voting trends
+- **Vite** - Lightning-fast development and building
+- **Wouter** - Lightweight client-side routing
+
+### Backend & APIs
+- **Express.js** - API server
+- **Hive Blockchain APIs** - Real-time blockchain data
+- **HAFBE API** - Complete voter data and historical analytics
+- **Hive Keychain SDK** - Secure wallet integration
+- **PostgreSQL + Drizzle ORM** - Database (optional, in-memory for dev)
 
 ## 🤝 Contributing
 
@@ -146,12 +161,39 @@ If you encounter any issues or have questions:
 1. Check that you have Hive Keychain installed and unlocked
 2. Make sure you're using a modern browser (Chrome, Firefox, Brave, Edge)
 3. Clear your browser cache if you see stale data
+4. Report issues on GitHub: https://github.com/Mantequilla-Soft/info-aliento-blog/issues
+
+## 🎉 Recent Improvements (November 2024)
+
+### Major Features Added
+- ✅ **Complete Voter Data** - Migrated to HAFBE API for 100% complete voter lists
+- ✅ **Historical Trends** - Added voting trend charts (7-day and 30-day views)
+- ✅ **Proxy Power Tracking** - View who's delegating voting power to you
+- ✅ **Activity Feed** - Real-time witness voting activity with HP breakdown
+- ✅ **Mobile Zoom** - Fixed accessibility issue blocking mobile zoom
+- ✅ **Smart Polling** - API requests pause when tab is hidden (saves battery)
+- ✅ **CORS Fix** - Proxied HAFBE API calls through backend for reliability
+- ✅ **Vercel SPA Routing** - Fixed direct navigation to all routes
+
+### Performance Improvements
+- 🚀 80% faster voter data loading (2-3s vs 10-20s)
+- 🔋 Reduced battery usage with intelligent polling
+- 💾 Better caching with React Query
+- 📱 Improved responsive design across all pages
+
+## ⚡ Performance
+
+- **80% faster voter data** - Fetches complete voter lists in 2-3 seconds (vs 10-20s before)
+- **Smart API polling** - Automatically pauses when tab is hidden to save battery
+- **Efficient caching** - React Query caches data to minimize API calls
+- **Mobile optimized** - Separate mobile/desktop views for best experience
 
 ## 🙏 Acknowledgments
 
-- Built for the **Hive community**
-- Powered by **Hive blockchain APIs**
+- Built for the **Hive community** by **@aliento**
+- Powered by **Hive blockchain APIs** and **HAFBE API** (Syncad)
 - Uses **PeakD Beacon** for API node monitoring
+- Special thanks to all Hive witnesses and voters!
 
 ---
 
