@@ -64,6 +64,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch witness' });
     }
   });
+
+  // Proxy endpoint for HAFBE API - witness voters
+  app.get('/api/hafbe/witnesses/:name/voters', async (req, res) => {
+    try {
+      const { name } = req.params;
+      const { page = '1', 'page-size': pageSize = '100', sort = 'vests', direction = 'desc' } = req.query;
+      
+      const url = `https://api.syncad.com/hafbe-api/witnesses/${name}/voters?page=${page}&page-size=${pageSize}&sort=${sort}&direction=${direction}`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        return res.status(response.status).json({ error: 'HAFBE API error' });
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching witness voters from HAFBE:', error);
+      res.status(500).json({ error: 'Failed to fetch witness voters' });
+    }
+  });
+
+  // Proxy endpoint for HAFBE API - account proxy power
+  app.get('/api/hafbe/accounts/:name/proxy-power', async (req, res) => {
+    try {
+      const { name } = req.params;
+      
+      const url = `https://api.syncad.com/hafbe-api/accounts/${name}/proxy-power`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        return res.status(response.status).json({ error: 'HAFBE API error' });
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching proxy power from HAFBE:', error);
+      res.status(500).json({ error: 'Failed to fetch proxy power' });
+    }
+  });
+
+  // Proxy endpoint for HAFBE API - witness votes history
+  app.get('/api/hafbe/witnesses/:name/votes/history', async (req, res) => {
+    try {
+      const { name } = req.params;
+      const { page = '1', 'page-size': pageSize = '100', 'voter-name': voterName } = req.query;
+      
+      let url = `https://api.syncad.com/hafbe-api/witnesses/${name}/votes/history?page=${page}&page-size=${pageSize}`;
+      if (voterName) {
+        url += `&voter-name=${voterName}`;
+      }
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        return res.status(response.status).json({ error: 'HAFBE API error' });
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching votes history from HAFBE:', error);
+      res.status(500).json({ error: 'Failed to fetch votes history' });
+    }
+  });
   
   const httpServer = createServer(app);
   return httpServer;

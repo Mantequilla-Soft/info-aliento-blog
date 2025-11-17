@@ -1170,7 +1170,7 @@ export const getWitnessVoters = async (witnessName: string): Promise<WitnessVote
     while (hasMorePages) {
       try {
         const response = await fetch(
-          `https://api.syncad.com/hafbe-api/witnesses/${witnessName}/voters?page=${page}&page-size=${pageSize}&sort=vests&direction=desc`,
+          `/api/hafbe/witnesses/${witnessName}/voters?page=${page}&page-size=${pageSize}&sort=vests&direction=desc`,
           {
             method: 'GET',
             headers: {

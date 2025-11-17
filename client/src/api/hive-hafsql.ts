@@ -12,7 +12,7 @@
  * - Complete witness statistics
  */
 
-const HAFBE_API = 'https://api.syncad.com/hafbe-api';
+const HAFBE_API = '/api/hafbe';
 
 export interface WitnessVoteOperation {
   voter_name: string;  // Account that voted
@@ -92,7 +92,7 @@ export async function getRecentWitnessVotes(
   try {
     console.log(`Fetching witness votes from HAFBE API for ${witnessName}`);
     
-    // Fetch from HAFBE API - votes are sorted by timestamp DESC (most recent first)
+    // Fetch from HAFBE API via proxy - votes are sorted by timestamp DESC (most recent first)
     const response = await fetch(
       `${HAFBE_API}/witnesses/${witnessName}/votes/history?page=1&page-size=${pageSize}`
     );
