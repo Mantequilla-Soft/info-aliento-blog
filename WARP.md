@@ -245,7 +245,41 @@ const witnesses = await chain.api.database_api.list_witnesses({
 3. Replace `keychain-sdk` with `@hiveio/wax-signers-keychain` in `KeychainContext`
 4. Test all endpoints for API response structure differences
 
-### HAF SQL Integration (Future)
+### HAFBE API (HAF Block Explorer API) - ACTIVE
+
+**HAFBE API** (https://api.syncad.com/hafbe-api/) is a public REST API built on HAF SQL that provides indexed Hive blockchain data.
+
+**Current usage in project:**
+- Recent voting activity tracking
+- Witness vote history with voter power details
+- Real-time vote operations with timestamps
+- Pagination support for large datasets
+
+**Available endpoints used:**
+- `/witnesses/{account-name}` - Witness details with rank, votes, feed data
+- `/witnesses/{account-name}/voters` - List all voters with pagination
+- `/witnesses/{account-name}/votes/history` - Complete vote history with HP data
+- `/accounts/{account-name}` - Account details and balances
+- `/accounts/{account-name}/proxy-power` - Proxy delegators and voting power
+
+**Key features:**
+- Vote operations include `vests`, `account_vests`, `proxied_vests`
+- Accurate blockchain timestamps
+- Pagination (100 items per page default)
+- Total counts for data planning
+- No API key required (public access)
+
+**Implementation location:**
+- `client/src/api/hive-hafsql.ts` - API client functions
+- `client/src/hooks/useRecentActivity.ts` - React hooks
+- `client/src/components/RecentActivity.tsx` - UI component
+
+**Migration status:**
+- Migrated from mahdiyari HAF SQL API to HAFBE API for better data quality
+- Witness activity feed now shows voter HP and accurate timestamps
+- Supports filtering by time ranges and voter accounts
+
+### HAF SQL Integration (Future - Self-Hosted)
 
 **HAF SQL** is a PostgreSQL application that provides indexed Hive blockchain data with SQL queries.
 
@@ -254,6 +288,7 @@ const witnesses = await chain.api.database_api.list_witnesses({
 - Faster data retrieval for large datasets
 - SQL-based searching across all operations
 - Historical blockchain data analysis
+- Custom queries beyond HAFBE API capabilities
 
 **Requirements:**
 - Self-hosted HAF database server (500GB+ storage)
@@ -265,9 +300,10 @@ const witnesses = await chain.api.database_api.list_witnesses({
 - "Track witness rank changes over time"
 - "Analyze voting power distribution"
 - "Find witnesses with declining vote trends"
+- Complex multi-witness correlation analysis
 
 **When to implement:**
-After the witness directory is stable and you need advanced analytics. Running a HAF instance will also benefit your witness operations by providing direct blockchain data access.
+After the witness directory is stable and you need advanced analytics beyond what HAFBE API provides. Running a HAF instance will also benefit your witness operations by providing direct blockchain data access.
 
 ## Changelog Location
 
