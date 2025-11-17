@@ -129,19 +129,31 @@ export function useWitnesses(
   const currentBlockProducer = useCurrentBlockProducer();
   
   // Set up automatic refreshing of witness data every 3 seconds - only for the first page
+  // Pauses polling when tab is hidden to save battery and reduce API load
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
+    
+    const handleVisibilityChange = () => {
+      if (document.hidden && intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      } else if (!document.hidden && currentPage === 0) {
+        intervalId = setInterval(() => refetch(), 3000);
+      }
+    };
     
     if (currentPage === 0) {
       intervalId = setInterval(() => {
         refetch();
       }, 3000); // 3 second refresh - matches Hive block time for real-time updates
+      document.addEventListener('visibilitychange', handleVisibilityChange);
     }
       
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [refetch, currentPage]);
 

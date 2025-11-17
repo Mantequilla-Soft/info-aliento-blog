@@ -68,14 +68,14 @@ export default function Home() {
             {t('home.description')}
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 max-w-md mx-auto">
-            <a 
-              href="https://info.aliento.blog/witnesses" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md bg-card text-primary hover:bg-card/90 focus:outline-none focus:ring-2 focus:ring-primary w-full"
-            >
-              {t('home.viewAll')}
-            </a>
+            <Link href="/witnesses" className="w-full">
+              <Button 
+                className="w-full px-5 py-3 text-base font-medium"
+                variant="default"
+              >
+                {t('home.viewAll')}
+              </Button>
+            </Link>
             <a 
               href="https://hive.io/whitepaper.pdf" 
               target="_blank" 
