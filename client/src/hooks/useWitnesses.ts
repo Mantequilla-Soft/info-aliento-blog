@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getWitnesses, getWitnessByName, getWitnessVoters, getProxyAccounts, getBestHiveNode, getWitnessAccountVoting } from '@/api/hive';
-import { Witness, WitnessVoter, ProxyAccount } from '@/types/hive';
+import { getWitnesses, getWitnessByName, getWitnessVoters, getProxyAccounts, getBestHiveNode, getWitnessAccountVoting, getWitnessSchedule } from '@/api/hive';
+import { Witness, WitnessVoter, ProxyAccount, WitnessScheduleDisplay } from '@/types/hive';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 
 // State to track the current block producer
@@ -354,5 +354,24 @@ export function useLazyLoading<T>(items: T[], initialCount: number = 20, increme
     visibleCount,
     totalCount: items.length,
     percent
+  };
+}
+
+// Hook for fetching witness schedule
+export function useWitnessSchedule() {
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['witness-schedule'],
+    queryFn: getWitnessSchedule,
+    staleTime: 1000 * 3, // 3 seconds - matches Hive block time
+    refetchInterval: 3000, // Auto-refresh every 3 seconds
+    refetchOnWindowFocus: false,
+  });
+
+  return {
+    schedule: data,
+    isLoading,
+    isError,
+    error,
+    refetch
   };
 }

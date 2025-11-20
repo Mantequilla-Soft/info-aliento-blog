@@ -78,6 +78,7 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
       // Header
       'nav.home': 'Home',
       'nav.witnesses': 'Witnesses',
+      'nav.schedule': 'Schedule',
       'nav.about': 'About',
       'login': 'Login',
       'login.withKeychain': 'Login with Keychain',
@@ -265,6 +266,10 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
       'userStats.viewProxyVotes': 'View Proxy\'s Votes',
       'userStats.viewStats': 'View Stats',
       
+      // Schedule page
+      'schedule.title': 'Block Production Schedule',
+      'schedule.description': 'Real-time view of the Hive blockchain witness block production schedule. See which witness is currently producing blocks and the upcoming rotation order.',
+      
       // Footer
       'footer.description': 'Supporting the Hive blockchain ecosystem through reliable witness operations and community development.',
       'footer.quickLinks': 'Quick Links',
@@ -281,6 +286,7 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
       // Header
       'nav.home': 'Inicio',
       'nav.witnesses': 'Testigos',
+      'nav.schedule': 'Calendario',
       'nav.about': 'Acerca de',
       'login': 'Iniciar sesión',
       'login.withKeychain': 'Iniciar sesión con Keychain',
@@ -467,6 +473,10 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
       'userStats.proxyExplanation': 'Has delegado tu poder de voto de testigos a esta cuenta. Esto significa que pueden votar por testigos en tu nombre.',
       'userStats.viewProxyVotes': 'Ver Votos del Proxy',
       'userStats.viewStats': 'Ver Estadísticas',
+      
+      // Schedule page
+      'schedule.title': 'Calendario de Producción de Bloques',
+      'schedule.description': 'Vista en tiempo real del calendario de producción de bloques de los testigos de la blockchain Hive. Ve qué testigo está produciendo bloques actualmente y el orden de rotación próximo.',
       
       // Footer
       'footer.description': 'Apoyando el ecosistema de la blockchain Hive a través de operaciones de testigo confiables y desarrollo comunitario.',

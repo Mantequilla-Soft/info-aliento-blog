@@ -130,6 +130,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch votes history' });
     }
   });
+
+  // Proxy endpoint for Balance Tracker API - account delegations
+  app.get('/api/balance/accounts/:name/delegations', async (req, res) => {
+    try {
+      const { name } = req.params;
+      
+      const url = `https://api.syncad.com/balance-api/accounts/${name}/delegations`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        return res.status(response.status).json({ error: 'Balance Tracker API error' });
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching delegations from Balance Tracker:', error);
+      res.status(500).json({ error: 'Failed to fetch delegations' });
+    }
+  });
   
   const httpServer = createServer(app);
   return httpServer;

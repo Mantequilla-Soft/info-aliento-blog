@@ -1,5 +1,6 @@
 import NetworkStatus from '@/components/NetworkStatus';
 import FeaturedWitness from '@/components/FeaturedWitness';
+import WitnessSchedule from '@/components/WitnessSchedule';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
 import { useLanguage } from '@/context/LanguageContext';
@@ -57,6 +58,28 @@ export default function Home() {
       <section id="about" className="py-16 bg-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <FeaturedWitness />
+        </div>
+      </section>
+      
+      {/* Block Production Schedule Section */}
+      <section className="py-16 bg-muted/30">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold mb-4">
+                {t('schedule.title') || 'Block Production Schedule'}
+              </h2>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-6">
+                {t('schedule.description')}
+              </p>
+              <Link href="/schedule">
+                <Button variant="outline" size="sm">
+                  View Full Schedule →
+                </Button>
+              </Link>
+            </div>
+            <WitnessSchedule />
+          </div>
         </div>
       </section>
       

@@ -213,7 +213,33 @@ export default function WitnessList() {
                               </Tooltip>
                             </TooltipProvider>
                           )}
-                          {!witness.isActive && (
+                          {witness.isDisabled ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="destructive" className="bg-red-600 hover:bg-red-700 text-xs">
+                                    Disabled
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs">Witness is disabled (null signing key)</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : witness.isStale ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge className="bg-yellow-600 hover:bg-yellow-700 text-xs">
+                                    Stale
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs">No blocks signed in last 24 hours</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : !witness.isActive && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -346,7 +372,33 @@ export default function WitnessList() {
                                     </Tooltip>
                                   </TooltipProvider>
                                 )}
-                                {!witness.isActive && (
+                                {witness.isDisabled ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="destructive" className="bg-red-600 hover:bg-red-700 text-xs">
+                                          Disabled
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="text-xs">Witness is disabled (null signing key)</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : witness.isStale ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge className="bg-yellow-600 hover:bg-yellow-700 text-xs">
+                                          Stale
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="text-xs">No blocks signed in last 24 hours</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : !witness.isActive && (
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>

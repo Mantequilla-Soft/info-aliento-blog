@@ -10,6 +10,7 @@ This is a **Witness Directory** for the Hive blockchain - think of it as a dashb
 
 - **Discover Witnesses**: Browse all active witnesses who help secure the Hive blockchain
 - **View Statistics**: See real-time network data like block height, transactions, and more
+- **Block Production Schedule**: Watch witnesses produce blocks in real-time with live rotation tracking
 - **Vote for Witnesses**: Support your favorite witnesses using Hive Keychain (up to 30 votes)
 - **Check API Nodes**: Find the best Hive API nodes with performance scores
 - **Track Your Activity**: View your voting power, witness votes, and account stats
@@ -31,6 +32,17 @@ This is a **Witness Directory** for the Hive blockchain - think of it as a dashb
 - Current HIVE price
 - Active witness count
 - Transaction volume
+
+### ⏱️ Block Production Schedule
+- **Real-time tracking** - See which witness is producing blocks right now
+- **Live updates** - Schedule refreshes every 3 seconds (matching Hive block time)
+- **Next 20 witnesses** - View the upcoming rotation order
+- **Upcoming backup witnesses** - See backup witnesses (rank 21+) scheduled soon
+- **Complete backup list** - Full directory of all 80+ backup witnesses with ranks
+- **Time estimates** - Hover any witness to see when they'll produce next block
+- **Interactive profiles** - Click any witness to view their detailed profile
+- **Shuffle countdown** - Track blocks until next schedule rotation
+- **Bilingual support** - Available in English and Spanish
 
 ### 🌐 API Nodes Monitor
 - Performance scores for all Hive API nodes
@@ -67,6 +79,13 @@ Choose your preferred viewing experience:
 - 🌙 Dark mode
 
 ## 🚀 How to Use
+
+### Viewing Block Production Schedule
+1. Visit the "Schedule" page from the main navigation
+2. See the currently producing witness with live "LIVE" indicator
+3. View the next 20 witnesses in rotation order
+4. Scroll down to see all backup witnesses (rank 21+)
+5. Hover over any witness to see time until their next block
 
 ### Viewing Witnesses
 1. Visit the home page to see the top witnesses
@@ -164,6 +183,17 @@ If you encounter any issues or have questions:
 4. Report issues on GitHub: https://github.com/Mantequilla-Soft/info-aliento-blog/issues
 
 ## 🎉 Recent Improvements (November 2024)
+
+### Latest Release: Block Production Schedule 🆕
+- ✅ **Real-time Schedule Tracking** - Live witness block production with 3-second updates
+- ✅ **Interactive Schedule View** - See next 20 witnesses in rotation order
+- ✅ **Backup Witnesses Display** - Complete list of all backup witnesses (rank 21+) with ranks
+- ✅ **Time-to-Block Estimates** - Hover tooltips showing when each witness produces next
+- ✅ **Upcoming Backup Section** - Special section for backup witnesses in next 20 slots
+- ✅ **Schedule Page** - Dedicated `/schedule` route with full schedule details
+- ✅ **Home Preview** - Quick schedule preview on home page
+- ✅ **Bilingual Schedule** - Full EN/ES translation support for all schedule features
+- ✅ **Mobile Optimized** - Responsive grids for mobile, tablet, and desktop
 
 ### Major Features Added
 - ✅ **Complete Voter Data** - Migrated to HAFBE API for 100% complete voter lists

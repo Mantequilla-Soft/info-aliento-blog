@@ -1,4 +1,4 @@
-import { HiveNode, NetworkStats, Witness, UserData, WitnessVoter, ProxyAccount, AccountRewards } from '@/types/hive';
+import { HiveNode, NetworkStats, Witness, UserData, WitnessVoter, ProxyAccount, AccountRewards, WitnessScheduleDisplay } from '@/types/hive';
 import { formatNumberWithCommas, formatHivePower, formatLargeNumber } from '@/lib/utils';
 
 // Default API node to use if we can't fetch the best nodes
@@ -339,44 +339,12 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
     console.log(`Fetching witnesses from: ${apiNode} (offset: ${offset}, limit: ${limit})`);
     
     // Request witness data with pagination
+    // To get correct ranks, we always fetch from the start (offset + limit witnesses)
+    // and then slice to get the requested range
+    const fetchLimit = offset + limit;
     let result;
+    
     try {
-      // For pagination, we need to get the last witness name from the previous batch
-      // For the first batch (offset=0), we use empty string
-      let startFrom = "";
-      
-      // If we're requesting a subsequent batch, first fetch just the witness at position offset-1
-      if (offset > 0) {
-        try {
-          // First get the previous witness to use as a starting point
-          const prevResult = await fetch(apiNode, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              "jsonrpc": "2.0",
-              "method": "condenser_api.get_witnesses_by_vote",
-              "params": ["", offset],
-              "id": 1
-            })
-          });
-          
-          if (prevResult.ok) {
-            const prevData = await prevResult.json();
-            const witnesses = prevData.result;
-            if (witnesses && witnesses.length > 0) {
-              // Get the last witness from previous batch
-              startFrom = witnesses[witnesses.length - 1].owner;
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching starting point for pagination:', error);
-          // Continue with empty startFrom as fallback
-        }
-      }
-      
-      // Now fetch the actual witnesses we want to display
       result = await fetch(apiNode, {
         method: 'POST',
         headers: {
@@ -385,7 +353,7 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
         body: JSON.stringify({
           "jsonrpc": "2.0",
           "method": "condenser_api.get_witnesses_by_vote",
-          "params": [startFrom, limit], // Fetch witnesses with pagination
+          "params": ["", fetchLimit], // Fetch from start to get correct ranks
           "id": 1
         })
       });
@@ -406,7 +374,7 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
           body: JSON.stringify({
             "jsonrpc": "2.0",
             "method": "condenser_api.get_witnesses_by_vote",
-            "params": ["", limit], // Fallback to first batch
+            "params": ["", fetchLimit], // Fallback to fetching from start
             "id": 1
           })
         });
@@ -416,7 +384,12 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
     }
     
     const data = await result.json();
-    const witnesses = data.result;
+    let witnesses = data.result;
+    
+    // Slice to get only the requested range
+    if (offset > 0 && witnesses.length > offset) {
+      witnesses = witnesses.slice(offset);
+    }
     
     // Ensure we have the vests to HP ratio before processing
     await ensureVestToHpRatio();
@@ -449,10 +422,13 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
       globalProps = { head_block_number: 0 };
     }
     
-    // Calculate the block number from 72 hours ago (assuming 3 second block time)
+    // Calculate the block number from 72 hours ago and 24 hours ago (assuming 3 second block time)
     const currentBlockNum = globalProps.head_block_number;
     const blocksIn72Hours = (72 * 60 * 60) / 3; // 72 hours in blocks
     const blockFrom72HoursAgo = currentBlockNum - blocksIn72Hours;
+    const blocksIn24Hours = (24 * 60 * 60) / 3; // 24 hours in blocks
+    const blockFrom24HoursAgo = currentBlockNum - blocksIn24Hours;
+    const DISABLED_KEY = 'STM1111111111111111111111111111111114T1Anm';
       
     // Format the witness data
     return witnesses.map((witness: any, index: number) => {
@@ -468,8 +444,13 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
       const blockNum = parseInt(witness.last_confirmed_block_num || '0');
       const formattedBlockNum = formatNumberWithCommas(blockNum);
       
-      // Check if the witness is active (has signed a block in the last 72 hours)
-      const isActive = blockNum > blockFrom72HoursAgo;
+      // Check witness status:
+      // - Disabled: signing_key is the null key
+      // - Stale: hasn't signed in 24 hours but still has valid key
+      // - Active: signed in last 24 hours
+      const isDisabled = witness.signing_key === DISABLED_KEY;
+      const isStale = !isDisabled && blockNum > blockFrom72HoursAgo && blockNum <= blockFrom24HoursAgo;
+      const isActive = !isDisabled && blockNum > blockFrom24HoursAgo;
       
       return {
         id: witness.id,
@@ -484,7 +465,9 @@ export const getWitnesses = async (offset: number = 0, limit: number = 100): Pro
         version: witness.running_version,
         created: witness.created,
         profileImage: `https://images.hive.blog/u/${witness.owner}/avatar`,
-        isActive: isActive
+        isActive: isActive,
+        isDisabled: isDisabled,
+        isStale: isStale
       };
     });
   } catch (error) {
@@ -827,6 +810,9 @@ export const getUserData = async (username: string): Promise<UserData> => {
     // Get lifetime rewards
     const rewards = await getAccountRewards(username);
     
+    // Get governance vote expiration timestamp
+    const governanceVoteExpiration = account?.governance_vote_expiration_ts || null;
+    
     // Return complete user data
     return {
       username,
@@ -837,7 +823,8 @@ export const getUserData = async (username: string): Promise<UserData> => {
       freeWitnessVotes,
       witnessVotes,
       proxy,
-      rewards
+      rewards,
+      governanceVoteExpiration
     };
   } catch (error) {
     console.error(`Error getting complete user data for ${username}:`, error);
@@ -943,9 +930,16 @@ export const getWitnessByName = async (name: string): Promise<Witness | null> =>
     const blockNum = parseInt(witness.last_confirmed_block_num);
     const formattedBlockNum = formatNumberWithCommas(blockNum);
     
-    // Fetch all witnesses to determine rank
-    const allWitnesses = await getWitnesses();
-    const rank = allWitnesses.findIndex(w => w.name === name) + 1;
+    // Fetch enough witnesses to determine rank (top 200 should cover most cases)
+    const allWitnesses = await getWitnesses(0, 200);
+    let rank = allWitnesses.findIndex(w => w.name === name) + 1;
+    
+    // If not found in top 200, the witness is ranked beyond 200 or not a witness
+    // In this case, we'll show the rank as 0 and handle display elsewhere
+    if (rank === 0) {
+      // Try to get rank from witness schedule which lists all active witnesses
+      console.log(`Witness ${name} not found in top 200, may be inactive or lower ranked`);
+    }
     
     // Get dynamic global properties to determine current block number
     let globalProps;
@@ -979,9 +973,17 @@ export const getWitnessByName = async (name: string): Promise<Witness | null> =>
     const currentBlockNum = globalProps.head_block_number;
     const blocksIn72Hours = (72 * 60 * 60) / 3; // 72 hours in blocks
     const blockFrom72HoursAgo = currentBlockNum - blocksIn72Hours;
+    const blocksIn24Hours = (24 * 60 * 60) / 3; // 24 hours in blocks
+    const blockFrom24HoursAgo = currentBlockNum - blocksIn24Hours;
     
-    // Check if the witness is active (has signed a block in the last 72 hours)
-    const isActive = blockNum > blockFrom72HoursAgo;
+    // Check witness status:
+    // - Disabled: signing_key is the null key (STM1111111111111111111111111111111114T1Anm)
+    // - Stale: hasn't signed in 24 hours but still has valid key
+    // - Active: signed in last 24 hours
+    const DISABLED_KEY = 'STM1111111111111111111111111111111114T1Anm';
+    const isDisabled = witness.signing_key === DISABLED_KEY;
+    const isStale = !isDisabled && blockNum > blockFrom72HoursAgo && blockNum <= blockFrom24HoursAgo;
+    const isActive = !isDisabled && blockNum > blockFrom24HoursAgo;
     
     // Get the HBD interest rate from the witness-specific props
     let hbdInterestRate;
@@ -1017,13 +1019,15 @@ export const getWitnessByName = async (name: string): Promise<Witness | null> =>
       created: witness.created,
       profileImage: `https://images.hive.blog/u/${witness.owner}/avatar`,
       isActive: isActive,
+      isDisabled: isDisabled,
+      isStale: isStale,
       witnessDescription: witnessDescription,
       hbdInterestRate: hbdInterestRate
     };
   } catch (error) {
     console.error(`Error fetching witness ${name}:`, error);
     return null;
-  }
+    }
 };
 
 // Use the WitnessVoter type from types/hive.ts
@@ -1279,5 +1283,116 @@ export const getWitnessVoters = async (witnessName: string): Promise<WitnessVote
   } catch (error) {
     console.error(`Error fetching witness voters for ${witnessName}:`, error);
     return [];
+  }
+};
+
+// Get the witness production schedule
+export const getWitnessSchedule = async (): Promise<WitnessScheduleDisplay | null> => {
+  try {
+    const apiNode = await getBestHiveNode();
+    console.log('Fetching witness schedule from:', apiNode);
+    
+    // Fetch the witness schedule
+    const scheduleResponse = await fetch(apiNode, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        "jsonrpc": "2.0",
+        "method": "condenser_api.get_witness_schedule",
+        "params": [],
+        "id": 1
+      })
+    });
+    
+    if (!scheduleResponse.ok) {
+      throw new Error(`Schedule fetch HTTP error status: ${scheduleResponse.status}`);
+    }
+    
+    const scheduleData = await scheduleResponse.json();
+    const schedule = scheduleData.result;
+    
+    // Fetch current block to determine position in schedule
+    const propsResponse = await fetch(apiNode, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        "jsonrpc": "2.0",
+        "method": "condenser_api.get_dynamic_global_properties",
+        "params": [],
+        "id": 2
+      })
+    });
+    
+    if (!propsResponse.ok) {
+      throw new Error(`Props fetch HTTP error status: ${propsResponse.status}`);
+    }
+    
+    const propsData = await propsResponse.json();
+    const props = propsData.result;
+    const currentBlock = props.head_block_number;
+    const currentWitnessName = props.current_witness;
+    
+    // The schedule is a circular list of witnesses
+    // Each witness produces 1 block when it's their turn
+    // current_shuffled_witnesses contains the order
+    const shuffledWitnesses = schedule.current_shuffled_witnesses || [];
+    
+    // Find the current witness position in the schedule
+    let currentSlot = shuffledWitnesses.indexOf(currentWitnessName);
+    if (currentSlot === -1) {
+      // If not found, use block number modulo schedule length
+      currentSlot = currentBlock % shuffledWitnesses.length;
+    }
+    
+    // Get the current witness (from dynamic props is most accurate)
+    const currentWitness = currentWitnessName;
+    
+    // Get the next 20 upcoming witnesses (circular rotation)
+    const upcomingWitnesses: string[] = [];
+    for (let i = 1; i <= 20; i++) {
+      const nextSlot = (currentSlot + i) % shuffledWitnesses.length;
+      upcomingWitnesses.push(shuffledWitnesses[nextSlot]);
+    }
+    
+    // Backup witnesses are witnesses beyond the top 20
+    // These are included in the schedule but produce blocks less frequently
+    // We can identify them by frequency in the schedule
+    const witnessFrequency = new Map<string, number>();
+    shuffledWitnesses.forEach((w: string) => {
+      witnessFrequency.set(w, (witnessFrequency.get(w) || 0) + 1);
+    });
+    
+    // Top 20 witnesses appear more frequently (multiple times in the schedule)
+    // Backup witnesses appear only once
+    const backupWitnesses = Array.from(witnessFrequency.entries())
+      .filter(([_, count]) => count === 1)
+      .map(([name, _]) => name)
+      .sort();
+    
+    // Get all unique witnesses from the schedule
+    const allScheduledWitnesses = Array.from(new Set(shuffledWitnesses));
+    
+    console.log(`Current witness: ${currentWitness}, Slot: ${currentSlot}/${shuffledWitnesses.length}`);
+    console.log(`Next shuffle at block: ${schedule.next_shuffle_block_num}`);
+    console.log(`Total unique witnesses in schedule: ${allScheduledWitnesses.length}`);
+    console.log(`Found ${backupWitnesses.length} backup witnesses`);
+    console.log(`Witness frequency map:`, Array.from(witnessFrequency.entries()).sort((a, b) => b[1] - a[1]));
+    
+    return {
+      currentWitness,
+      upcomingWitnesses,
+      backupWitnesses,
+      allScheduledWitnesses: Array.from(new Set(shuffledWitnesses)),
+      currentSlot,
+      nextShuffleBlock: schedule.next_shuffle_block_num,
+      currentBlock
+    };
+  } catch (error) {
+    console.error('Error fetching witness schedule:', error);
+    return null;
   }
 };

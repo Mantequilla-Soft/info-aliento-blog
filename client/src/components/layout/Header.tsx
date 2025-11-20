@@ -63,6 +63,9 @@ export default function Header() {
                 <Link href="/witnesses" className={`px-3 py-2 text-sm font-medium ${isActive('/witnesses') ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}>
                   {t('nav.witnesses')}
                 </Link>
+                <Link href="/schedule" className={`px-3 py-2 text-sm font-medium ${isActive('/schedule') ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}>
+                  {t('nav.schedule') || 'Schedule'}
+                </Link>
                 <Link href="/about" className={`px-3 py-2 text-sm font-medium ${isActive('/about') ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}>
                   {t('nav.about')}
                 </Link>
@@ -222,6 +225,14 @@ export default function Header() {
               >
                 <span className="material-symbols-outlined align-bottom mr-2">supervised_user_circle</span>
                 {t('nav.witnesses')}
+              </Link>
+              <Link 
+                href="/schedule" 
+                className={`block px-4 py-3 rounded-md text-base font-medium ${isActive('/schedule') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-primary'}`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <span className="material-symbols-outlined align-bottom mr-2">schedule</span>
+                {t('nav.schedule') || 'Schedule'}
               </Link>
               <Link 
                 href="/about" 

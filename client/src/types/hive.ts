@@ -28,7 +28,9 @@ export interface Witness {
   version: string;
   created: string;
   profileImage: string;
-  isActive: boolean; // Flag to indicate if the witness is active (has signed a block in the last 72 hours)
+  isActive: boolean; // Flag to indicate if the witness is active (signed a block in last 24 hours)
+  isDisabled?: boolean; // Flag to indicate if the witness is disabled (signing key is null key)
+  isStale?: boolean; // Flag to indicate if the witness is stale (hasn't signed in 24 hours but has valid key)
   witnessDescription?: string; // The witness description from posting_metadata
   hbdInterestRate?: string; // HBD interest rate (APR)
 }
@@ -43,6 +45,7 @@ export interface UserData {
   witnessVotes?: string[];
   proxy?: string; // The account this user is proxying their votes to
   rewards?: AccountRewards; // Lifetime rewards data
+  governanceVoteExpiration?: string | null; // Timestamp when governance votes expire
 }
 
 export interface AccountRewards {
@@ -85,3 +88,34 @@ export type LoginResponse = {
   publicKey?: string;
   result?: any;
 };
+
+export interface WitnessSchedule {
+  id: number;
+  current_virtual_time: string;
+  next_shuffle_block_num: number;
+  current_shuffled_witnesses: string[];
+  num_scheduled_witnesses: number;
+  elected_weight: number;
+  timeshare_weight: number;
+  miner_weight: number;
+  witness_pay_normalization_factor: number;
+  median_props: any;
+  majority_version: string;
+  max_voted_witnesses: number;
+  max_miner_witnesses: number;
+  max_runner_witnesses: number;
+  hardfork_required_witnesses: number;
+  account_subsidy_rd: any;
+  account_subsidy_witness_rd: any;
+  min_witness_account_subsidy_decay: number;
+}
+
+export interface WitnessScheduleDisplay {
+  currentWitness: string;
+  upcomingWitnesses: string[];
+  backupWitnesses: string[];
+  allScheduledWitnesses: string[];
+  currentSlot: number;
+  nextShuffleBlock: number;
+  currentBlock: number;
+}
